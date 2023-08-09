@@ -10,6 +10,8 @@ import numpy as np
 from typing import (
     List,
     Optional,
+    Dict,
+    Tuple,
 )
 
 def prepare_cat(

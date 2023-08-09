@@ -5,8 +5,13 @@ Tools for river network analysis in Python using efficient algorithms
 from __future__ import annotations
 
 import networkx as nx
+import geopandas as gpd
 
-idef find_upstream(
+from typing import (
+    Union,
+)
+
+def find_upstream(
     gdf: gpd.GeoDataFrame,
     target_id: Union[str, int, ...],
     main_id: str,

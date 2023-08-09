@@ -6,9 +6,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as np
 
-from typing import )
+from typing import ( 
     List,
+    Dict,
 )
+
+ID_type = Union[int, str, ...]
 
 def spatial_conn(
     gdf: gpd.GeoDataFrame,
