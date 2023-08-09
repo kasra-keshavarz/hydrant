@@ -3,7 +3,7 @@ from __future__ import annotations
 __docformat__ = "restructuredtext"
 
 # dependency assumptions
-_hard_dependencies = ('geopandas', 'networkx')
+_hard_dependencies = ('geopandas', 'networkx', 'pandas', 'numpy')
 _missing_dependencies = []
 
 for _dep in _hard_dependencies:
@@ -21,9 +21,12 @@ del _hard_dependencies, _dep, _missing_dependencies
 
 # docstring using numpy style
 __doc__ = """
-hydant: HYdrological ANalysis Tool for Python
-=============================================
+hydant: HYdrological ANalysis Tool
+==================================
 
-**hydant** is a simple Python package 
+**hydant** is a simple Python package containing common functions needed
+for manipulations, sanity checks, and aggregations on river and subbasin
+geometries in the hydrological modelling context
 
 """
+

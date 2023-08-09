@@ -1,0 +1,95 @@
+[build-system]
+requires = ["hatchling>=1.8.1"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hydrant"
+dynamic = ["version"]
+description = "Common tools for manipulation, adjusting, and sanity checking river and subbasin geometries in the hydrological modelling context"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "GPLv3"
+authors = [
+  { name = "Kasra Keshavarz", email = "kasra.keshavarz1@ucalgary.ca" },
+]
+maintainers = [
+  { name = "hydrant contributors" },
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Intended Audience :: End Users/Desktop",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "numpy>=1.20.3",
+  "networkx>=3.1",
+  "geopandas>=0.13.2",
+  "pandas>=1.5.3",
+  "
+  "matplotlib>=3.2.2",
+  "pandas>=1.2",
+  "multiprocess",
+]
+
+[project.optional-dependencies]
+distributed = [
+    "pathos>=0.2.5",
+]
+
+test = [
+    "SALib[distributed]",
+    "pytest",
+    "pytest-cov",
+]
+
+doc = [
+    "sphinx",
+    "myst_parser",
+    "numpydoc",
+    "pydata-sphinx-theme>=0.10"
+]
+
+dev = [
+    "SALib[distributed]",
+    "SALib[test]",
+    "SALib[doc]",
+    "pre-commit",
+    "hatch",
+]
+
+[project.scripts]
+salib = "SALib.scripts.salib:main"
+
+[project.urls]
+Documentation = "https://salib.readthedocs.io"
+"Source code" = "https://github.com/SALib/SALib"
+
+[tool.hatch]
+version.path = "src/SALib/__init__.py"
+build.targets.sdist.exclude = [
+  ".github",
+  "docs",
+  "examples",
+  "paper",
+  "tests",
+  "*.md",
+  "*.rst",
+  "*.yml",
+  "*.cff",
+  ".*",
+]
+
+[tool.pytest.ini_options]
+addopts = "--durations 10"
+testpaths = [
+    "tests",
+]
