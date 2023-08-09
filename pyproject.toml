@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = 'Commons tools for river and subbasin adjustments in Python'
 readme = "README.md"
 requires-python = ">=3.7"
-license = "GPLv3"
+license = {file = 'LICENSE'}
 keywords = []
 authors = [
   { name = "Kasra Keshavarz", email = "kasra.keshavarz1@ucalgary.ca" },
@@ -36,7 +36,7 @@ Issues = "https://github.com/kasra-keshavarz/hydrant/issues"
 Source = "https://github.com/kasra-keshavarz/hydrant"
 
 [tool.hatch.version]
-path = "src/hydrant/__about__.py"
+path = "src/hydrant/__init__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -164,6 +164,9 @@ exclude_lines = [
 exclude = [
     "/.github",
     "/docs",
+    "tests",
+    ".*",
+    "*.yml",
 ]
 
 [tool.hatch.build.targets.wheel]

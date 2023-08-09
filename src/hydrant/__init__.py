@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 __docformat__ = "restructuredtext"
+__version__ = "0.1.0-dev0"
 
 # dependency assumptions
 _hard_dependencies = ('geopandas', 'networkx', 'pandas', 'numpy')
@@ -29,4 +30,3 @@ for manipulations, sanity checks, and aggregations on river and subbasin
 geometries in the hydrological modelling context
 
 """
-
