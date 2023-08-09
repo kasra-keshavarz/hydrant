@@ -13,7 +13,7 @@ from typing import (
     Dict,
 )
 
-ID_type = Union[int, str, ...]
+ID_type = Union[int, str]
 
 def union_seg(
     gdf: gpd.GeoDataFrame,
