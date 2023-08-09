@@ -165,3 +165,6 @@ exclude = [
     "/.github",
     "/docs",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hydrant"]
