@@ -11,6 +11,7 @@ from typing import (
     Union,
     List,
     Dict,
+    Callable,
 )
 
 ID_type = Union[int, str]
