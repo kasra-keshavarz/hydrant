@@ -255,6 +255,11 @@ def prepare_riv(
     river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
     # fix zero and negative values for fields that are not acceptable
     river_sec = [riv_col_len, riv_col_len_dir, riv_col_slope]
+    # remove possible `None` values from `river_sec`
+    while None in river_sec:
+        river_sec.remove(None)
+
+    # creating `river_sec_df` 
     river_sec_df = river.loc[:, river_sec]
     river_sec_df.where(~(river_sec_df <= 0), riv_na_val, inplace=True)
     river_sec_df.where(~(river_sec_df.isnull()), riv_na_val, inplace=True)
