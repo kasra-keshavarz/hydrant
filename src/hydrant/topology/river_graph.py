@@ -47,7 +47,9 @@ def find_upstream(
     
     # return nodes in a list
     nodes = nx.ancestors(riv_graph, target_id)
-    
+
+    # adding `target_id` as the last node of the branch
+    nodes.add(target_id)
+
     return nodes
-
-
+  

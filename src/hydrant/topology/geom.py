@@ -14,6 +14,9 @@ from typing import (
     Tuple,
 )
 
+from .river_graph import find_upstream
+
+
 def prepare_cat(
     cat: gpd.GeoDataFrame,
     cat_col_id: str,
@@ -255,6 +258,12 @@ def prepare_riv(
     river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
     # fix zero and negative values for fields that are not acceptable
     river_sec = [riv_col_len, riv_col_len_dir, riv_col_slope]
+
+    # remove possible `None` values from `river_sec`
+    while None in river_sec:
+        river_sec.remove(None)
+
+    # creating `river_sec_df` 
     river_sec_df = river.loc[:, river_sec]
     river_sec_df.where(~(river_sec_df <= 0), riv_na_val, inplace=True)
     river_sec_df.where(~(river_sec_df.isnull()), riv_na_val, inplace=True)
@@ -334,7 +343,11 @@ def intersect_topology(
         assert riv[riv_col_id].isin([outletid]), "`outlet_id` must be chosen from segments included in `riv`"
         
         # find upstream segments
-        upstream_ids = esmr.get_all_upstream(outlet_id, ntopo)
+        upstream_ids = find_upstream(gdf=riv,
+                                     target_id=outletid,
+                                     main_id=riv_col_id,
+                                     ds_main_id=riv_col_next_id
+                                    )
     else:
         raise NotImplemented("Either `shapefile` or `outlet_id` must be specified")
     

@@ -5,18 +5,23 @@ Common sanity checks on river and subbasin geometries
 import geopandas as gpd
 import numpy as np
 import pandas as np
+import networkx as nx
 
 from typing import ( 
     List,
     Dict,
+    Union,
+    Tuple,
 )
 
-ID_type = Union[int, str, ...]
+ID_type = Union[int, str]
+
 
 def spatial_conn(
     gdf: gpd.GeoDataFrame,
     main_id: str=None,
     ds_main_id: str=None,
+    outlet_id_value: Union[str, int]=None,
     print_err: bool=True,
 ) -> Tuple[Dict, Dict]:
     
@@ -35,6 +40,9 @@ def spatial_conn(
     ds_main_id: str, defaults to `None`
         String defining the column of downstream element IDs in the
         input geopandas dataframe
+    outlet_id_value: str or int, defaults to `None`
+        Value of outlet river segments where the downstream connectivity
+        could be skipped
     print_err: bool, defaults to `True` (optional)
         Argument to specify either print the detailed errors within the
         input `gdf`
@@ -67,7 +75,7 @@ def spatial_conn(
     for idx, feature in gdf.iterrows():
 
         # Skip over features with DS_Main_ID = 0
-        if feature[ds_main_id] == 0:
+        if feature[ds_main_id] == outlet_id_value:
             continue
 
         # Find the corresponding descendant feature
@@ -103,6 +111,7 @@ def spatial_conn(
     
     return connections, wrong_conns
 
+  
 def find_cycles(
     gdf: gpd.GeoDataFrame,
     main_id: str,
@@ -149,6 +158,7 @@ def find_cycles(
     
     return cycles
 
+  
 def sanitize_connectivity(
     gdf: gpd.GeoDataFrame,
     main_id: str,
@@ -202,3 +212,34 @@ def sanitize_connectivity(
     
     return modified_gdf
 
+
+def longest_branch(
+    riv: gpd.GeoDataFrame,
+    main_id: Union[str, int]=None,
+    ds_main_id: Union[str, int]=None,
+) -> List:
+    """Returns nodes of the longest branch of a river network
+
+    Parameters
+    ----------
+    riv : gpd.GeoDataFrame
+        a geopandas.GeoDataFrame object containing the geometry,
+        `main_id`, and `ds_main_id` of a river network
+    main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to ID values of river
+        segments
+    ds_main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to downstream segments of
+        each river
+        
+    Returns
+    -------
+    nodes : set
+        a set object containing river segment `main_id` calues of the
+        longest branch found in `riv`
+    """
+    riv_graph = nx.from_pandas_edgelist(riv, source=main_id, target=ds_main_id, create_using=nx.DiGraph)
+
+    nodes = nx.dag_longest_path(riv_graph)
+
+    return nodes
