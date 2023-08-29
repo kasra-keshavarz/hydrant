@@ -16,6 +16,7 @@ from typing import (
 
 ID_type = Union[int, str]
 
+
 def spatial_conn(
     gdf: gpd.GeoDataFrame,
     main_id: str=None,
@@ -110,6 +111,7 @@ def spatial_conn(
     
     return connections, wrong_conns
 
+  
 def find_cycles(
     gdf: gpd.GeoDataFrame,
     main_id: str,
@@ -156,6 +158,7 @@ def find_cycles(
     
     return cycles
 
+  
 def sanitize_connectivity(
     gdf: gpd.GeoDataFrame,
     main_id: str,
@@ -209,6 +212,7 @@ def sanitize_connectivity(
     
     return modified_gdf
 
+
 def longest_branch(
     riv: gpd.GeoDataFrame,
     main_id: Union[str, int]=None,
@@ -239,4 +243,3 @@ def longest_branch(
     nodes = nx.dag_longest_path(riv_graph)
 
     return nodes
-

@@ -50,7 +50,6 @@ def find_upstream(
 
     # adding `target_id` as the last node of the branch
     nodes.add(target_id)
-    
+
     return nodes
-
-
+  
