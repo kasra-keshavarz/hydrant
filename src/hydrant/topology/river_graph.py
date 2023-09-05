@@ -9,7 +9,9 @@ import geopandas as gpd
 
 from typing import (
     Union,
+    List
 )
+
 
 def find_upstream(
     gdf: gpd.GeoDataFrame,
@@ -43,8 +45,11 @@ def find_upstream(
     
     '''
     # creating a DiGraph out of `gdf` object
-    riv_graph = nx.from_pandas_edgelist(gdf, source=main_id, target=ds_main_id, create_using=nx.DiGraph)
-    
+    riv_graph = nx.from_pandas_edgelist(gdf,
+                                        source=main_id,
+                                        target=ds_main_id,
+                                        create_using=nx.DiGraph)
+
     # return nodes in a list
     nodes = nx.ancestors(riv_graph, target_id)
 
@@ -52,4 +57,38 @@ def find_upstream(
     nodes.add(target_id)
 
     return nodes
-  
+
+
+def longest_branch(
+    riv: gpd.GeoDataFrame,
+    main_id: Union[str, int] = None,
+    ds_main_id: Union[str, int] = None,
+) -> List[str, int]:
+    """Returns nodes of the longest branch of a river network
+
+    Parameters
+    ----------
+    riv : gpd.GeoDataFrame
+        a geopandas.GeoDataFrame object containing the geometry,
+        `main_id`, and `ds_main_id` of a river network
+    main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to ID values of river
+        segments
+    ds_main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to downstream segments of
+        each river
+        
+    Returns
+    -------
+    nodes : set
+        a set object containing river segment `main_id` calues of the
+        longest branch found in `riv`
+    """
+    riv_graph = nx.from_pandas_edgelist(riv,
+                                        source=main_id,
+                                        target=ds_main_id,
+                                        create_using=nx.DiGraph)
+
+    nodes = nx.dag_longest_path(riv_graph)
+
+    return nodes
