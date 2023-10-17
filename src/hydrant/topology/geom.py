@@ -340,11 +340,11 @@ def intersect_topology(
         # check `outlet_id` dtype
         assert isinstance(outlet_id, int), "`outlet_id` must be of type int"
         # check if outlet_id is included in the `riv` IDs
-        assert riv[riv_col_id].isin([outletid]), "`outlet_id` must be chosen from segments included in `riv`"
+        assert riv[riv_col_id].isin([outlet_id]), "`outlet_id` must be chosen from segments included in `riv`"
         
         # find upstream segments
         upstream_ids = find_upstream(gdf=riv,
-                                     target_id=outletid,
+                                     target_id=outlet_id,
                                      main_id=riv_col_id,
                                      ds_main_id=riv_col_next_id
                                     )
