@@ -329,33 +329,32 @@ def intersect_topology(
     cat_col_id = cat_cols.get('id')
     riv_col_id = riv_cols.get('id')
     riv_col_next_id = riv_cols.get('next_id')
-    
+
     if shapefile is not None:
         # check `shapefile` dtype
         assert isinstance(shapefile, gpd.GeoDataFrame), "`shapefile` must be of type geopandas.GeoDataFrame"
         # intersection with `cat`
         upstream_ids = cat.overlay(shapefile, how='intersection')[cat_col_id]
-        
+
     elif outlet_id is not None:
         # check `outlet_id` dtype
         assert isinstance(outlet_id, int), "`outlet_id` must be of type int"
         # check if outlet_id is included in the `riv` IDs
-        assert riv[riv_col_id].isin([outletid]), "`outlet_id` must be chosen from segments included in `riv`"
-        
+        assert riv[riv_col_id].isin([outlet_id]).any(), "`outlet_id` must be chosen from segments included in `riv`"
+
         # find upstream segments
         upstream_ids = find_upstream(gdf=riv,
-                                     target_id=outletid,
+                                     target_id=outlet_id,
                                      main_id=riv_col_id,
-                                     ds_main_id=riv_col_next_id
-                                    )
+                                     ds_main_id=riv_col_next_id)
     else:
-        raise NotImplemented("Either `shapefile` or `outlet_id` must be specified")
-    
+        raise NotImplementedError("Either `shapefile` or `outlet_id` must be specified")
+
     # index `cat` and `riv` and return `cat_clipped` and `riv_clipped`
     cat_clipped = cat.loc[cat[cat_col_id].isin(upstream_ids), :].copy()
     riv_clipped = riv.loc[riv[riv_col_id].isin(upstream_ids), :].copy()
-    
+
     # assign `outlet_val` to the segments without downstream segments
     riv_clipped.loc[~riv_clipped[riv_col_next_id].isin(riv_clipped[riv_col_id]), riv_col_next_id] = outlet_val
-    
+
     return cat_clipped, riv_clipped
