@@ -334,7 +334,9 @@ def intersect_topology(
         # check `shapefile` dtype
         assert isinstance(shapefile, gpd.GeoDataFrame), "`shapefile` must be of type geopandas.GeoDataFrame"
         # intersection with `cat`
-        upstream_ids = cat.overlay(shapefile, how='intersection')[cat_col_id]
+        upstream_ids = cat.overlay(shapefile,
+                                   how='intersection',
+                                   keep_geom_type=True)[cat_col_id]
 
     elif outlet_id is not None:
         # check `outlet_id` dtype
