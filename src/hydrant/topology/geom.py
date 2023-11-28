@@ -5,13 +5,13 @@ in the context of hydrological modelling
 
 import geopandas as gpd
 import pandas as pd
-import numpy as np
 
 from typing import (
-    List,
     Optional,
     Dict,
     Tuple,
+    Union,
+    Sequence,
 )
 
 from .river_graph import find_upstream
@@ -290,12 +290,12 @@ def intersect_topology(
     riv: gpd.GeoDataFrame,
     riv_cols: Dict[str, str],
     shapefile: gpd.GeoDataFrame = None,
-    outlet_id: int = None,
-    outlet_val: int = -9999,
+    outlet_id: Optional[Union[int, Sequence[int]]] = None,
+    outlet_val: Optional[int] = -9999,
 ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     '''Intesecting `cat` and `riv` with a given `shapefile`
     or a specified `outlet_id` of interest.
-    
+
     Parameters
     ----------
     cat: geopandas.GeoDataFrame
@@ -311,13 +311,13 @@ def intersect_topology(
     shapefile: geopandas.GeoDataFrame, optional [defaults to None]
         A GeoDataFrame specifying the limits of the river network
         topology of interest
-    outlet_id: int, optional [defaults to None]
-        A GeoDataFrame specifying the most downstream river segment
+    outlet_id: int, or sequence of ints, optional [defaults to None]
+        the ID or list of IDs specifying the most downstream river segment
         to be specified as the outlet of the river network topology
-        in addition to non-contributing subbasins, if any 
+        in addition to any non-contributing subbasins
     outlet_val: int, optional [defailts to -9999]
         An integer being set to the most downstream river segments
-    
+
     Returns
     -------
     cat_clipped: geopandas.GeoDataFrame
@@ -329,33 +329,37 @@ def intersect_topology(
     cat_col_id = cat_cols.get('id')
     riv_col_id = riv_cols.get('id')
     riv_col_next_id = riv_cols.get('next_id')
-    
+
     if shapefile is not None:
         # check `shapefile` dtype
         assert isinstance(shapefile, gpd.GeoDataFrame), "`shapefile` must be of type geopandas.GeoDataFrame"
         # intersection with `cat`
-        upstream_ids = cat.overlay(shapefile, how='intersection')[cat_col_id]
-        
+        upstream_ids = cat.overlay(shapefile,
+                                   how='intersection',
+                                   keep_geom_type=True)[cat_col_id]
+
     elif outlet_id is not None:
-        # check `outlet_id` dtype
-        assert isinstance(outlet_id, int), "`outlet_id` must be of type int"
+        # if it is a single ID, make a set out of it
+        outlet_id = set(outlet_id)
+
         # check if outlet_id is included in the `riv` IDs
-        assert riv[riv_col_id].isin([outletid]), "`outlet_id` must be chosen from segments included in `riv`"
-        
+        assert riv[riv_col_id].isin(outlet_id).any(), "`outlet_id` must be chosen from segments included in `riv`"
+
         # find upstream segments
-        upstream_ids = find_upstream(gdf=riv,
-                                     target_id=outletid,
-                                     main_id=riv_col_id,
-                                     ds_main_id=riv_col_next_id
-                                    )
+        upstream_ids = set()
+        for element in outlet_id:
+            upstream_ids.update(find_upstream(gdf=riv,
+                                              target_id=element,
+                                              main_id=riv_col_id,
+                                              ds_main_id=riv_col_next_id))
     else:
-        raise NotImplemented("Either `shapefile` or `outlet_id` must be specified")
-    
+        raise NotImplementedError("Either `shapefile` or `outlet_id` must be specified")
+
     # index `cat` and `riv` and return `cat_clipped` and `riv_clipped`
     cat_clipped = cat.loc[cat[cat_col_id].isin(upstream_ids), :].copy()
     riv_clipped = riv.loc[riv[riv_col_id].isin(upstream_ids), :].copy()
-    
+
     # assign `outlet_val` to the segments without downstream segments
     riv_clipped.loc[~riv_clipped[riv_col_next_id].isin(riv_clipped[riv_col_id]), riv_col_next_id] = outlet_val
-    
+
     return cat_clipped, riv_clipped
