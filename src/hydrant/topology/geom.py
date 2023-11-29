@@ -41,7 +41,6 @@ def merit_read_file (
                                     {'id':'COMID','area':'unitarea'},
                                     cat = cat,
                                     cat_col_id = 'COMID')
-            cst = cst.drop(columns = ['FID'])
         else:
             cst = None
         
@@ -111,6 +110,9 @@ def merit_cst_prepare(
 
     # assign `coastal_hillslope` flag
     cst['hillslope'] = 1
+    
+    # drop FID column
+    cst = cst.drop(columns = ['FID'])
 
     # return
     return cst
@@ -138,6 +140,7 @@ def prepare_ntopo(
     riv_cols: Dict[str, str],
     cat: gpd.GeoDataFrame,
     cat_cols: Dict[str, str],
+    network: str,
     outlet_val: int = -9999,
     crs: int = 4326,
     *args,
@@ -191,7 +194,7 @@ def prepare_ntopo(
     riv_col_next_id = riv_cols.get('next_id')
     hil_col_id = cat_cols.get('hillslope')
     cat_col_id = cat_cols.get('id')
-    cat_col_geom = cat_cols.get('geom')
+    cat_col_area = cat_cols.get('area')
 
     # extract the hillslope column from `cat` and assign `id` as index
     hills = cat.set_index(cat_col_id)
@@ -200,51 +203,87 @@ def prepare_ntopo(
     # add the hillslope flag from `cat`
     # `cat` has necessary greater than or equal number of items than `riv`
     river = gpd.GeoDataFrame(riv.join(other=hills, on=riv_col_id, how='outer'),
-                             geometry=cat_col_geom)
+                             geometry='geometry')
 
     # assign `outlet_val` to the `hillslope_id` river segments
     river.loc[river[hil_col_id] == 1, riv_col_next_id] = outlet_val
 
-    # sort based on `cat_col_id` and reset_index
+    # sort based on `riv_col_id` and reset_index
     river.sort_values(by=riv_col_id, axis='index', inplace=True)
     river.reset_index(drop=True, inplace=True)
+    
+    # sort based on `cat_col_id` and reset_index
+    cat.sort_values(by=cat_col_id, axis='index', inplace=True)
+    cat.reset_index(drop=True, inplace=True)
 
     # assign crs
     river.set_crs(epsg=crs, inplace=True)
     
     
-    # if network = 'merit':
-        # # necessary columns being chosen for downcasting of dtypes
-        # # and other necessary assignments
-        # col_list = list(river.columns)
-        # for col in [cat_col_id, cat_col_geom]:
-        #     col_list.remove(col)
+    if network == 'merit':
+        
+        # fix cicular segemnts, in other words, those whose 'id' and
+        # 'next_id's are the same
+        river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
+        
+        # pass the unit area from cat
+        river['unitarea'] = 0
+        river['unitarea'] = cat['unitarea']
+        
+        # fill NAs with `riv_na_val` values in `rivers`
+        river.loc[river[hil_col_id] == 1, ['maxup','up1','up2','up3','up4']] = 0
+        river.loc[river[hil_col_id] == 1, ['lengthkm','lengthdir','sinuosity','slope','slope_taud']] = 0.001
+        river.loc[river[hil_col_id] == 1, ['strmDrop_t','order']] = 1
+        river.loc[river[hil_col_id] == 1, 'uparea'] = river.loc[river[hil_col_id] == 1, 'unitarea']
+        
+        # approximate width based on uparea
+        
+        # dictionary
+        data_types = {
+            'COMID': int,       
+            'order': int,     
+            'NextDownID': int,       
+            'maxup': int,
+            'up1': int,
+            'up2': int,
+            'up3': int,
+            'up4': int,
+            'hillslope': int,
+        }
 
-        # # fill NAs with `riv_na_val` values in `rivers`
-        # river.loc[river[hillslope_id] == 1, col_list] = riv_na_val
+        # Convert columns to specified data types
+        river = river.astype(data_types)
 
-        # # fix cicular segemnts, in other words, those whose 'id' and
-        # # 'next_id's are the same
-        # river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
-        # # fix zero and negative values for fields that are not acceptable
-        # river_sec = [riv_col_len, riv_col_len_dir, riv_col_slope]
+        
+#         # necessary columns being chosen for downcasting of dtypes
+#         # and other necessary assignments
+#         col_list = list(river.columns)
+#         for col in [cat_col_id, cat_col_geom]:
+#             col_list.remove(col)
 
-        # # remove possible `None` values from `river_sec`
-        # while None in river_sec:
-        #     river_sec.remove(None)
+#         # fill NAs with `riv_na_val` values in `rivers`
+#         river.loc[river[hillslope_id] == 1, col_list] = riv_na_val
 
-        # # creating `river_sec_df`
-        # river_sec_df = river.loc[:, river_sec]
-        # river_sec_df.where(~(river_sec_df <= 0), riv_na_val, inplace=True)
-        # river_sec_df.where(~(river_sec_df.isnull()), riv_na_val, inplace=True)
-        # river.loc[:, river_sec] = river_sec_df
+        
+#         # fix zero and negative values for fields that are not acceptable
+#         river_sec = [riv_col_len, riv_col_len_dir, riv_col_slope]
 
-        # # downcast dtype of necessary columns to integer, if possible
-        # fcols = river[col_list].select_dtypes('float').columns
-        # river[fcols] = river[fcols].apply(pd.to_numeric, downcast='integer')
+#         # remove possible `None` values from `river_sec`
+#         while None in river_sec:
+#             river_sec.remove(None)
+
+#         # creating `river_sec_df`
+#         river_sec_df = river.loc[:, river_sec]
+#         river_sec_df.where(~(river_sec_df <= 0), riv_na_val, inplace=True)
+#         river_sec_df.where(~(river_sec_df.isnull()), riv_na_val, inplace=True)
+#         river.loc[:, river_sec] = river_sec_df
+
+#         # downcast dtype of necessary columns to integer, if possible
+#         fcols = river[col_list].select_dtypes('float').columns
+#         river[fcols] = river[fcols].apply(pd.to_numeric, downcast='integer')
     
     # return
-    return river
+    return river, cat
 
 
 def intersect_topology(
