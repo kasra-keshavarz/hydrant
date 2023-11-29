@@ -6,6 +6,7 @@ in the context of hydrological modelling
 import geopandas as gpd
 import pandas as pd
 import os
+import sys
 
 from typing import (
     Optional,
@@ -26,6 +27,8 @@ def merit_read_file (
     path_cst: Optional [str] = None,
     cst_file_template: Optional [str] = None):
     
+    
+    # initializaing empty geodataframe
     cat_all = gpd.GeoDataFrame()
     riv_all = gpd.GeoDataFrame()
     
@@ -120,6 +123,20 @@ def merit_cst_prepare(
 def merit_cat_cst_merge (cat,
                          cst: Optional[gpd.GeoDataFrame] = None,
                          crs: int = 4326) -> gpd.GeoDataFrame:
+    '''add the hillslope flag and merge the cat and costal hillslope
+    into one geodataframe
+    Parameters
+    ----------
+    cat: geopandas.GeoDataFrame
+        The catchment object derived from `merit_read_file`.
+    cst: geopandas.GeoDataFrame
+        The costal hillslope object read in `merit_read_file`
+    
+    Returns
+    -------
+    catchment: geopandas.GeoDataFrame
+        combined cat and costal hillslope with their hillslope flag
+    '''
     
     cat['hillslope'] = 0
     if not cst is None:
@@ -134,6 +151,60 @@ def merit_cat_cst_merge (cat,
     
     return catchment
     
+def hdma_read_file(
+    regions: list,
+    path_riv: str,
+    riv_file_template: str,
+    path_cat: str,
+    cat_file_template: str):
+    
+    # initializaing empty geodataframe
+    cat_all = gpd.GeoDataFrame()
+    riv_all = gpd.GeoDataFrame()
+    
+    for region in regions:
+        
+        # read files cat, riv, cst
+        riv = gpd.read_file(os.path.join(path_riv, riv_file_template.replace('*', region)))
+        cat = gpd.read_file(os.path.join(path_cat, cat_file_template.replace('*', region)))
+        
+        # slice based on the region for cat
+        riv = riv[(riv['seg_id'] >= 1000000*int(region)) & (riv['seg_id'] <= 1000000*int(region)+999999)]
+        
+        # identifying hillslope catchments
+        cat = hdma_assining_cst(riv,
+                                {'id':'seg_id'},
+                                cat,
+                                {'id':'hruid'})
+        
+        # append the files
+        riv_all = pd.concat([riv_all, riv])
+        cat_all = pd.concat([cat_all, cat])
+        
+    # return
+    return riv_all, cat_all
+        
+        
+def hdma_assining_cst(riv,
+                      riv_id,
+                      cat,
+                      cat_id):
+    
+    # get the name of the colomns
+    riv_col_id = riv_id.get('id')
+    cat_col_id = cat_id.get('id')
+    
+    # check if the IDs from river all in the cat
+    if not riv[riv_col_id].isin(cat[cat_col_id]).all():
+        sys.exit('it seems the river passed has river segments that are not in cat')
+        
+    # assign hillslope flag to ids that are not 
+    cat ['hillslope'] = 0
+    cat.loc[~cat[cat_col_id].isin(riv[riv_col_id]), 'hillslope'] = 1
+    
+    # return
+    return cat
+        
 
 def prepare_ntopo(
     riv: gpd.GeoDataFrame,
@@ -155,24 +226,32 @@ def prepare_ntopo(
     riv_cols: dict
         A dictionary containing 'id', 'next_id', keys and values
         corresponding to the river segement IDs and their downstream
-        river segments, respectively. Also, other keys includes 'slope',
-        'length', 'length_direct'
+        river segments, respectively.
     cat: geopandas.GeoDataFrame
-        The catchment topology object derived from `prepare_cat`
-        function
+        The catchment topology object derived from `merit_read_file`
+        that takes care of costal hillslopes, COMIDs, etc using the
+        function `merit_cst_prepare` and `merit_cat_cst_merge`.
     cat_cols: dict
-        A dictionary containing 'id', 'hillslope' keys and values
-        corresponding to the catchment IDs and also the flag indicating
-        whether the catchment is a coastal hillslope one (1) or not (0)
+        A dictionary containing 'id', 'hillslope', and 'unitarea'
+        keys and values corresponding to the catchment IDs and also
+        the flag indicating whether the catchment is a coastal 
+        hillslope one (1) or not (0)
+    network: str
+        A string that define the input network topology into the function
+        This can be one of `merit`, 'hdma', or `tdx`
     outlet_val: int, optional [defaults to -9999]
         Value being assigned to the 'next_id' cell of the each
         river segments indicating the segment is an outlet for the network;
         before any subsetting, if any coastal hillslope segments exist, they
         will only be set to the outlet value.
+        
     Returns
     -------
     river: geopandas.GeoDataFrame
         The prepared river network topology GeoDataFrame object
+    cat: geopandas.GeoDataFrame
+        For consistency with other functions passes the cat as
+        output. 
     '''
 
     # necessary assertions
@@ -219,8 +298,7 @@ def prepare_ntopo(
     # assign crs
     river.set_crs(epsg=crs, inplace=True)
     
-    
-    if network == 'merit':
+    if network.lower() == 'merit':
         
         # fix cicular segemnts, in other words, those whose 'id' and
         # 'next_id's are the same
@@ -230,13 +308,30 @@ def prepare_ntopo(
         river['unitarea'] = 0
         river['unitarea'] = cat['unitarea']
         
+        # centroid of cat
+        river['latitude'] = 0
+        river['longitude'] = 0
+        river['latitude'] = cat.centroid.y
+        river['longitude'] = cat.centroid.x
+        
         # fill NAs with `riv_na_val` values in `rivers`
         river.loc[river[hil_col_id] == 1, ['maxup','up1','up2','up3','up4']] = 0
         river.loc[river[hil_col_id] == 1, ['lengthkm','lengthdir','sinuosity','slope','slope_taud']] = 0.001
         river.loc[river[hil_col_id] == 1, ['strmDrop_t','order']] = 1
         river.loc[river[hil_col_id] == 1, 'uparea'] = river.loc[river[hil_col_id] == 1, 'unitarea']
         
-        # approximate width based on uparea
+        # values that cannot be negative to a minimume value
+        river.loc[river['lengthkm'] <= 0.0, 'lengthkm'] = 0.001 # km
+        river.loc[river['slope'] <= 0.0, 'slope'] = 0.0001 # m/m
+        river.loc[river['slope_taud'] <= 0.0, 'slope_taud'] = 0.0001 # m/m
+        river.loc[river['unitarea'] <= 0.0, 'unitarea'] = 0.001 # km2
+        river.loc[river['uparea'] <= 0.0, 'uparea'] = 0.001 # km2
+        
+        # approximate width based on uparea based on Eq. 5 of Mizukami et al., 2016
+        # with changes to have at least 1 meter of channel
+        # area assumed to be in meter square
+        river['width'] = 0.0
+        river['width'] = 0.001 * ((river['uparea']*10**6)**0.5) + 1
         
         # dictionary
         data_types = {
@@ -253,34 +348,55 @@ def prepare_ntopo(
 
         # Convert columns to specified data types
         river = river.astype(data_types)
-
+    
+    elif network.lower() == 'hdma':
         
-#         # necessary columns being chosen for downcasting of dtypes
-#         # and other necessary assignments
-#         col_list = list(river.columns)
-#         for col in [cat_col_id, cat_col_geom]:
-#             col_list.remove(col)
-
-#         # fill NAs with `riv_na_val` values in `rivers`
-#         river.loc[river[hillslope_id] == 1, col_list] = riv_na_val
-
+        # pass the unit area from cat
+        river['area_org'] = 0
+        river['area_org'] = cat['area_org']
         
-#         # fix zero and negative values for fields that are not acceptable
-#         river_sec = [riv_col_len, riv_col_len_dir, riv_col_slope]
-
-#         # remove possible `None` values from `river_sec`
-#         while None in river_sec:
-#             river_sec.remove(None)
-
-#         # creating `river_sec_df`
-#         river_sec_df = river.loc[:, river_sec]
-#         river_sec_df.where(~(river_sec_df <= 0), riv_na_val, inplace=True)
-#         river_sec_df.where(~(river_sec_df.isnull()), riv_na_val, inplace=True)
-#         river.loc[:, river_sec] = river_sec_df
-
-#         # downcast dtype of necessary columns to integer, if possible
-#         fcols = river[col_list].select_dtypes('float').columns
-#         river[fcols] = river[fcols].apply(pd.to_numeric, downcast='integer')
+        # centroid of cat
+        river['latitude'] = 0
+        river['longitude'] = 0
+        river['latitude'] = cat.centroid.y
+        river['longitude'] = cat.centroid.x
+        
+        # pass the area of cat as flow acc to the river
+        river.loc[river[hil_col_id] == 1, 'flow_acc'] = river.loc[river[hil_col_id] == 1, 'area_org']/(10**6)
+        
+        #
+        river.loc[river[hil_col_id] == 1, 'Length'] = 0
+        river.loc[river[hil_col_id] == 1, 'Slope'] = 0.0001
+        
+        # non negative values
+        river.loc[river['Length'] <= 0.0, 'Length'] = 1 # m
+        river.loc[river['Slope'] <= 0.0, 'Slope'] = 0.0001 # m/m
+        
+        # replace nan with -9999 except geometry
+        columns_to_fill = [col for col in river.columns if col not in ['geometry']]
+        river[columns_to_fill] = river[columns_to_fill].fillna(-9999)
+        
+        # approximate width based on uparea based on Eq. 5 of Mizukami et al., 2016
+        # with changes to have at least 1 meter of channel
+        # area assumed to be in meter square
+        river['width'] = 0.0
+        river['width'] = 0.001 * ((river['flow_acc']*10**6)**0.5) + 1
+        
+        # dictionary
+        data_types = {
+            'OBJECTID': int,       
+            'PFAF': int,     
+            'PFAF_CODE': int,       
+            'PF_TYPE': int,
+            'Tosegment': int,
+            'seg_id': int,
+            'hillslope': int,
+        }
+        # Convert columns to specified data types
+        river = river.astype(data_types)
+        
+    else:
+        sys.exit('The network topology is not recognized; it should be merit, hdma, tdx')
     
     # return
     return river, cat
@@ -317,7 +433,7 @@ def intersect_topology(
         the ID or list of IDs specifying the most downstream river segment
         to be specified as the outlet of the river network topology
         in addition to any non-contributing subbasins
-    outlet_val: int, optional [defailts to -9999]
+    outlet_val: int, optional [defaults to -9999]
         An integer being set to the most downstream river segments
 
     Returns
@@ -416,3 +532,66 @@ def box_to_geometry(
         raise ValueError("Either the spatial limits or a list of them must be provided")
 
     return gpd.GeoDataFrame(index=[0], crs=f'epsg:{crs}', geometry=[geometry])
+
+
+def create_nc_ntopo(riv,
+                    cat,
+                    network = 'merit'): # can be merit, hdma, or tdx
+    
+    if network.lower() == 'merit':
+        
+        # sort by COMID
+        riv.sort_values(by='COMID').reset_index(drop=True)
+        cat.sort_values(by='COMID').reset_index(drop=True)
+        
+        # check if the riv and cat IDs are similar
+        if sum(riv['COMID'].values - cat['COMID'].values) != 0:
+            sys.exit('The COMID of riv and cat should be the same')
+        
+        # rename lengthkm to length
+        riv = riv.rename(columns={'lengthkm': 'length'})
+        
+        # drop geometry to make gdf to df
+        ntopo = riv.drop(columns = 'geometry')
+        
+        # convert index to n
+        ntopo = ntopo.rename_axis('n')
+        
+        # to xarray object,
+        ntopo = ntopo.to_xarray()
+        
+        # add the units to the variables using pint
+        ntopo = ntopo.pint.quantify({'length': 'km',
+                                     'area': 'km**2',
+                                     'uparea': 'km**2'})
+        
+        # convert dictionary
+        convert = {'length': 'm',
+                   'area': 'm**2',
+                   'uparea': 'm**2'}
+        
+        # covert the units in ntopo
+        ntopo = ntopo.pint.to(convert)
+        ntopo = ntopo.pint.dequantify()
+        
+    elif network.lower() == 'hdma':
+        
+        # sort by COMID
+        riv.sort_values(by='seg_id').reset_index(drop=True)
+        cat.sort_values(by='hruid').reset_index(drop=True)
+        
+        # check if the riv and cat IDs are similar
+        if sum(riv['seg_id'].values - cat['hruid'].values) != 0:
+            sys.exit('The seg_id and hruid of riv and cat should be the same')
+        
+        # drop geometry to make gdf to df
+        ntopo = riv.drop(columns = 'geometry')
+
+        # convert index to n
+        ntopo = ntopo.rename_axis('n')
+
+        # to xarray object,
+        ntopo = ntopo.to_xarray()
+        
+    # return the ntopo xarray object
+    return ntopo
