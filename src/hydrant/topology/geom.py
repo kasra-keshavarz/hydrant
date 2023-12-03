@@ -402,7 +402,7 @@ def prepare_ntopo(
     return river, cat
 
 
-def intersect_topology(
+def subset_ntopo(
     cat: gpd.GeoDataFrame,
     cat_cols: Dict[str, str],
     riv: gpd.GeoDataFrame,
