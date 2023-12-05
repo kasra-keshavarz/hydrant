@@ -190,3 +190,145 @@ def reorder_output(file_name,
     
     # return
     return ds
+
+
+def remapping_config (config):
+    
+    
+    esmr = Easymore()
+
+    # config from dictionary
+    esmr = esmr.from_dict(config)
+    
+    # make sure the remapping file creation is correct
+    esmr.only_create_remap_csv = True
+    
+    # execute EASYMORE
+    esmr.nc_remapper()
+    
+    # read the remapping file and process
+    ds = xr.open_dataset(config.get('temp_dir')+'_remapping.nc')
+    
+    # convert ds to df so the manupulation is easier
+    df = ds.to_dataframe()
+    #print(df)
+    
+    # sort based on ID_t
+    df = df.sort_values(by=['ID_t'])
+    
+    # sort and get the case
+    case = df['easymore_case'].values[0].item()
+    #print(case)
+    
+    # river network ID and its frequency in intersection with runoff field grid
+    RN_id, RN_frequency_in_intersection = np.unique(df['ID_t'].values, return_counts=True)
+    print("The dimension of overlap between river network and hydrological units:")
+    for dim in ds.dims:
+        print(len(ds[dim]))
+    if len(RN_id) == len(RN_frequency_in_intersection):
+        print("The dimension of river network and its frequancy are:")
+        print(len(RN_id))
+        print(len(RN_frequency_in_intersection))
+    else:
+        sys.exit("the dimension of river network and its frequency are not the same")
+        
+    # Create a empty ntopo
+    ntopo = xr.Dataset()
+    
+    # Populate the xarray dataarrays for polyid and their frequancy
+    ntopo['polyid'] = xr.DataArray(RN_id, dims=('polyid',))
+    ntopo['frequency'] = xr.DataArray(RN_frequency_in_intersection, dims=('polyid',))
+    
+    # populate the other varibales
+    ntopo['IDmask'] = xr.DataArray(df['ID_t'].values, dims=('intersect',))
+    ntopo['weight'] = xr.DataArray(df['weight'].values, dims=('intersect',))
+    
+    if case == 1 or case == 2:
+        ntopo['cols'] = xr.DataArray(df['cols'].values+1, dims=('intersect',)) # python-EASYMORE to index for fortran
+        ntopo['rows'] = xr.DataArray(df['rows'].values+1, dims=('intersect',)) # python-EASYMORE to index for fortran
+    elif case == 3:
+        ntopo['ID_s'] = xr.DataArray(df['ID_s'].values, dims=('intersect',))
+        
+    #print(ntopo)
+    
+    return ntopo
+
+#     # get remapping information from easymore remap file
+#     IDmask  = np.array(df['ID_t']) # the ID of river network
+#     weight  = np.array(df['weight']) # the weight of each hydrological unit in river network
+#     i_index = np.array(df['cols']) # cols for case 1 and 2
+#     j_index = np.array(df['rows']) # rows for case 1 and 2
+#     ID_s    = np.array(df['ID_s']) # ID from unstructure mesh case 3
+
+
+#     # write the netcdf file
+#     if os.path.isfile(file_to_save):
+#         os.remove(file_to_save)
+
+#     with nc4.Dataset(file_to_save, "w", format="NETCDF4") as ncid: # creating the NetCDF file
+
+#         # define the dimensions
+#         dimid_ID  = ncid.createDimension('polyid', len(RN_id))  # limited dimensiton equal the number of hruID
+#         dimid_RMP = ncid.createDimension('intersect', len(df))   # intersection
+
+#         # Variables RN_id, RN_frequency_in_intersection
+#         #
+#         RN_IDvar   = ncid.createVariable('polyid', 'int',  ('polyid', ), fill_value = -9999, zlib=True, complevel=9)
+#         RN_IDvar.long_name = 'ID of River Network subbasins'
+#         RN_IDvar.standard_name = 'ID of River Network subbasins'
+#         RN_IDvar.units = '1'
+#         RN_IDvar[:] = RN_id
+#         #
+#         RN_FRvar   = ncid.createVariable('frequency', 'int', ('polyid', ), fill_value = -9999, zlib=True, complevel=9)
+#         RN_FRvar.long_name = 'Frequancy of intersection River Network subbasins with hydrological subbasins'
+#         RN_FRvar.standard_name = 'Frequancy of intersection River Network subbasins with hydrological subbasins'
+#         RN_FRvar.units = '1'
+#         RN_FRvar[:] = RN_frequency_in_intersection
+
+#         # ID_mask, weight, i_index, j_index, ID_s
+#         #
+#         IDmaskvar  = ncid.createVariable('IDmask', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
+#         IDmaskvar.long_name = 'ID of rive network subbasins'
+#         IDmaskvar.standard_name = 'ID of rive network subbasins'
+#         IDmaskvar.units = '1'
+#         IDmaskvar[:] = IDmask
+#         #
+#         weightvar   = ncid.createVariable('weight', 'f8',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
+#         weightvar.long_name = 'weight of each hydrological unit in river network subbasins'
+#         weightvar.standard_name = 'weight of each hydrological unit in river network subbasins'
+#         weightvar.units = '1'
+#         weightvar[:] = weight
+
+#         if case == 1 or case == 2:
+#             #
+#             i_indexvar  = ncid.createVariable('i_index', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
+#             i_indexvar.long_name = 'cols from the source nc file'
+#             i_indexvar.standard_name = 'cols from the source nc file'
+#             i_indexvar.units = '1'
+#             i_indexvar[:] = i_index + 1
+#             #
+#             j_indexvar   = ncid.createVariable('j_index', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
+#             j_indexvar.long_name = 'rows from the source nc file'
+#             j_indexvar.standard_name = 'rows from the source nc file'
+#             j_indexvar.units = '1'
+#             j_indexvar[:] = j_index + 1
+
+#         if case == 3:
+#             #
+#             ID_HRvar   = ncid.createVariable('ID_HR', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
+#             ID_HRvar.long_name = 'river network ID'
+#             ID_HRvar.standard_name = 'river network ID'
+#             ID_HRvar.units = '1'
+#             ID_HRvar[:] = ID_s
+
+#         # general attributes for NetCDF file
+#         ncid.Conventions = 'CF-1.6'
+#         ncid.Author = 'The data were written by easymore_codes'
+#         ncid.License = 'MIT'
+#         ncid.History = 'Created '
+#         ncid.Source = 'Case: ; remapped by script from library of Shervan Gharari (https://github.com/ShervanGharari/EASYMORE).'
+
+
+#     # show the remap file
+#     ds = xr.open_dataset(file_to_save)
+#     ds
