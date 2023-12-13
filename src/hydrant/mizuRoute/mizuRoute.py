@@ -195,10 +195,10 @@ def reorder_output(file_name,
 def remapping_config (config):
     
     
-    esmr = Easymore()
+    # esmr = Easymore()
 
     # config from dictionary
-    esmr = esmr.from_dict(config)
+    esmr = Easymore.from_dict(config)
     
     # make sure the remapping file creation is correct
     esmr.only_create_remap_csv = True
