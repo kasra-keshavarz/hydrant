@@ -99,6 +99,7 @@ def reorder_output(file_name,
                    var_time,
                    dim_time,
                    var_to_keep = None,
+                   sum_flag = False,
                    save_reordered = False,
                    reorder_pre = 'reorder_',
                    output_folder = 'reorder'):
@@ -121,6 +122,8 @@ def reorder_output(file_name,
         Dimention of variable time.
     var_to_keep: list[str], optional
         collection of varibales to be included in reordered nc file(s).
+    sum_flag: logical[], optional
+        if set to true the values will be sum of all time series
     save_reordered: logical[], optional
         Flag to save the xarray object as nc file(s). If multiple file is 
         provided it will be set to True internally.
@@ -173,6 +176,16 @@ def reorder_output(file_name,
         idx = np.where(np.in1d(np.array(ds[var_id][:]), order_ids))[0]
         ds = ds.isel({dim_id:idx})
         
+        # sum the reorder on dimension id;
+        if sum_flag:
+            # Iterate through the Dataset's variables
+            for var_name in ds.variables:
+                # Check if the variable has both 'time' and 'segid' dimensions
+                if dim_time in ds[var_name].dims and dim_id in ds[var_name].dims:
+                    ds[var_name]=ds[var_name].sum(dim=dim_id)
+                elif not dim_time in ds[var_name].dims:
+                    ds = ds.drop_vars(var_name)
+        
         # Save the rearranged dataset
         if save_reordered:
             if not os.path.isdir(output_folder):
@@ -195,8 +208,6 @@ def reorder_output(file_name,
 def remapping_config (config):
     
     
-    # esmr = Easymore()
-
     # config from dictionary
     esmr = Easymore.from_dict(config)
     
@@ -253,82 +264,3 @@ def remapping_config (config):
     
     return ntopo
 
-#     # get remapping information from easymore remap file
-#     IDmask  = np.array(df['ID_t']) # the ID of river network
-#     weight  = np.array(df['weight']) # the weight of each hydrological unit in river network
-#     i_index = np.array(df['cols']) # cols for case 1 and 2
-#     j_index = np.array(df['rows']) # rows for case 1 and 2
-#     ID_s    = np.array(df['ID_s']) # ID from unstructure mesh case 3
-
-
-#     # write the netcdf file
-#     if os.path.isfile(file_to_save):
-#         os.remove(file_to_save)
-
-#     with nc4.Dataset(file_to_save, "w", format="NETCDF4") as ncid: # creating the NetCDF file
-
-#         # define the dimensions
-#         dimid_ID  = ncid.createDimension('polyid', len(RN_id))  # limited dimensiton equal the number of hruID
-#         dimid_RMP = ncid.createDimension('intersect', len(df))   # intersection
-
-#         # Variables RN_id, RN_frequency_in_intersection
-#         #
-#         RN_IDvar   = ncid.createVariable('polyid', 'int',  ('polyid', ), fill_value = -9999, zlib=True, complevel=9)
-#         RN_IDvar.long_name = 'ID of River Network subbasins'
-#         RN_IDvar.standard_name = 'ID of River Network subbasins'
-#         RN_IDvar.units = '1'
-#         RN_IDvar[:] = RN_id
-#         #
-#         RN_FRvar   = ncid.createVariable('frequency', 'int', ('polyid', ), fill_value = -9999, zlib=True, complevel=9)
-#         RN_FRvar.long_name = 'Frequancy of intersection River Network subbasins with hydrological subbasins'
-#         RN_FRvar.standard_name = 'Frequancy of intersection River Network subbasins with hydrological subbasins'
-#         RN_FRvar.units = '1'
-#         RN_FRvar[:] = RN_frequency_in_intersection
-
-#         # ID_mask, weight, i_index, j_index, ID_s
-#         #
-#         IDmaskvar  = ncid.createVariable('IDmask', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
-#         IDmaskvar.long_name = 'ID of rive network subbasins'
-#         IDmaskvar.standard_name = 'ID of rive network subbasins'
-#         IDmaskvar.units = '1'
-#         IDmaskvar[:] = IDmask
-#         #
-#         weightvar   = ncid.createVariable('weight', 'f8',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
-#         weightvar.long_name = 'weight of each hydrological unit in river network subbasins'
-#         weightvar.standard_name = 'weight of each hydrological unit in river network subbasins'
-#         weightvar.units = '1'
-#         weightvar[:] = weight
-
-#         if case == 1 or case == 2:
-#             #
-#             i_indexvar  = ncid.createVariable('i_index', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
-#             i_indexvar.long_name = 'cols from the source nc file'
-#             i_indexvar.standard_name = 'cols from the source nc file'
-#             i_indexvar.units = '1'
-#             i_indexvar[:] = i_index + 1
-#             #
-#             j_indexvar   = ncid.createVariable('j_index', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
-#             j_indexvar.long_name = 'rows from the source nc file'
-#             j_indexvar.standard_name = 'rows from the source nc file'
-#             j_indexvar.units = '1'
-#             j_indexvar[:] = j_index + 1
-
-#         if case == 3:
-#             #
-#             ID_HRvar   = ncid.createVariable('ID_HR', 'int',  ('intersect', ), fill_value = -9999, zlib=True, complevel=9)
-#             ID_HRvar.long_name = 'river network ID'
-#             ID_HRvar.standard_name = 'river network ID'
-#             ID_HRvar.units = '1'
-#             ID_HRvar[:] = ID_s
-
-#         # general attributes for NetCDF file
-#         ncid.Conventions = 'CF-1.6'
-#         ncid.Author = 'The data were written by easymore_codes'
-#         ncid.License = 'MIT'
-#         ncid.History = 'Created '
-#         ncid.Source = 'Case: ; remapped by script from library of Shervan Gharari (https://github.com/ShervanGharari/EASYMORE).'
-
-
-#     # show the remap file
-#     ds = xr.open_dataset(file_to_save)
-#     ds

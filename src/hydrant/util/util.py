@@ -20,11 +20,9 @@ from typing import (
 
 import xarray as xr
 import glob
-import geopandas as gpd
 import sys
 from   easymore import Easymore
 import pandas as pd
-import pint_xarray
 
 
 
@@ -75,3 +73,4 @@ def mesh_output_txt_to_nc(csv_name,
         Data.to_netcdf(nc_file_to_save)
     
     return Data
+
