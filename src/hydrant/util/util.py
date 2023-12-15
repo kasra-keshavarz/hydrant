@@ -40,12 +40,13 @@ def mesh_output_txt_to_nc(csv_name,
     
     
     RFF_csv = pd.read_csv(csv_name, header=None)
-    RFF_csv = RFF_csv.rename(columns={0: 'time'})
-    RFF_csv['time'] = pd.to_datetime(RFF_csv['time'])
-    RFF_csv = RFF_csv.set_index('time')
     RFF_csv = RFF_csv.iloc[:, :-1] # drop the last column which is empty
+    RFF_csv.columns = RFF_csv.columns.astype(str)
+    RFF_csv = RFF_csv.rename(columns={'0': data_frame_DateTime_column})
+    RFF_csv[data_frame_DateTime_column] = pd.to_datetime(RFF_csv[data_frame_DateTime_column])
+    RFF_csv = RFF_csv.set_index(data_frame_DateTime_column)
+    RFF_csv.columns = RFF_csv.columns.astype(int)
     
-
     # initializing EASYMORE object
     esmr = Easymore()
 
