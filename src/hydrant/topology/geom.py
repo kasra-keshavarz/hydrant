@@ -3,8 +3,10 @@ Common functions for working with river and sub-basin geometries
 in the context of hydrological modelling
 """
 
-import geopandas as gpd
-import pandas as pd
+import numpy      as np
+import networkx   as nx
+import geopandas  as gpd
+import pandas     as pd
 import os
 import sys
 
@@ -204,7 +206,175 @@ def hdma_assining_cst(riv,
     
     # return
     return cat
+
+def tdx_read_file  (codes:list,
+                    path_riv: str,
+                    riv_file_template: str,
+                    path_cat: str,
+                    cat_file_template: str,
+                    prepare_for_ntopo = True):
+    
+    # initializaing empty geodataframe
+    cat_all = gpd.GeoDataFrame()
+    riv_all = gpd.GeoDataFrame()
+    
+    for code in codes:
         
+        # read files cat, riv, cst
+        riv = gpd.read_file(os.path.join(path_riv, riv_file_template.replace('*', code)))
+        cat = gpd.read_file(os.path.join(path_cat, cat_file_template.replace('*', code)))
+        
+        # check if the length of riv is larger or equal to cat
+        if len(riv) < len(cat):
+            sys.exit('the length of river is smaller than the length of cat')
+        
+        # add hillslope
+        cat ['hillslope'] = 0
+        
+        # add pfaf to riv and cat
+        riv['pfafcode'] = int(code)
+        cat['pfafcode'] = int(code)
+        
+        if prepare_for_ntopo:
+        
+            # identify the linkage
+            riv, cat = tdx_identify_linkage(riv, cat)
+
+            # remove of linkages
+            riv = tdx_contraction_of_linkage(riv)
+
+            # check if the cat and riv are the same
+            if set(riv['LINKNO']) != set(cat['streamID']):
+                sys.exit('cat and riv have different LINKNO and streamID for code: '+ code)
+
+            # sort based on ID and pfaf
+            riv.sort_values(by=['LINKNO', 'pfafcode'], axis='index', inplace=True)
+            riv.reset_index(drop=True, inplace=True)
+
+            # sort based on ID and pfaf
+            cat.sort_values(by=['streamID', 'pfafcode'], axis='index', inplace=True)
+            cat.reset_index(drop=True, inplace=True)
+
+            # pass area from the riv to cat
+            riv['area'] = riv.apply(lambda x: x['DSContArea'] if x['strmOrder'] == 1 else x['DSContArea'] - x['USContArea'], axis=1)
+            cat['area'] = riv ['area']
+        
+        # append the files
+        riv_all = pd.concat([riv_all, riv])
+        cat_all = pd.concat([cat_all, cat])
+        
+    # sort based on ID and pfaf
+    riv_all.sort_values(by=['LINKNO', 'pfafcode'], axis='index', inplace=True)
+    riv_all.reset_index(drop=True, inplace=True)
+
+    # sort based on ID and pfaf
+    cat_all.sort_values(by=['streamID', 'pfafcode'], axis='index', inplace=True)
+    cat_all.reset_index(drop=True, inplace=True)
+
+    # set the projection
+    riv_all.set_crs(epsg=4326, inplace=True, allow_override=True)
+    cat_all.set_crs(epsg=4326, inplace=True, allow_override=True)
+        
+    return riv_all, cat_all
+                    
+def tdx_identify_linkage(riv,
+                         cat):
+    
+    # identify the linkage in the river
+    riv_slice = riv.copy()
+    riv_slice = riv_slice[~riv_slice['LINKNO'].isin(cat['streamID'])]
+
+    # check if the riv len, riv_slice add up to cat
+    if len(riv_slice)+len(cat) != len(riv):
+        sys.exit('There are differences between the river and cat')
+            
+    # check the ids
+    if set(riv_slice['LINKNO'].values) | set(cat['streamID'].values) != set(riv['LINKNO'].values):
+        sys.exit('inside identifying linkage, the LINKNO and streamID are not the same as riv LINKNO')
+    
+    # add linkage flag
+    riv['linkage'] = 0
+    riv.loc[riv['LINKNO'].isin(riv_slice['LINKNO'].values), 'linkage'] = 1
+    
+    # return
+    return riv, cat
+
+def tdx_contraction_of_linkage  (df,
+                                 mapping = {'id':'LINKNO','next_id':'DSLINKNO','linkage_flag':'linkage'},
+                                 column_to_drop = ['USLINKNO1', 'USLINKNO2']):
+    
+    # get the name of id, next_id, linkage_flag
+    downID = mapping.get('next_id')
+    ID = mapping.get('id')
+    linkage_flag = mapping.get('linkage_flag')
+
+    # make sure the id, next_id, linkage_flag is int
+    df[downID] = df[downID].astype(int)
+    df[ID] = df[ID].astype(int)
+    df[linkage_flag] = df[linkage_flag].astype(int)
+    
+    for index, row in df.iterrows():
+        if row[linkage_flag] == 1: # if linkage
+            # find the upstream segmenet in which drain into 
+            idx = np.array(df[df[downID]==row[ID]].index)
+            df.loc[idx,downID]=row[downID] # correct the downstream for upstream segment to skip linkage
+
+    # remove the linakges
+    df = df[df[linkage_flag]==0].reset_index(drop=True)
+    
+    # drop the colomn
+    df = df.drop(columns = column_to_drop)
+    
+    # df 
+    df = add_immediate_upstream (df,
+                                 mapping = mapping)
+    
+    # return
+    return df
+    
+
+    
+#     # keep the needed columns and drop the columns that will be replace
+#     attributes_df = df.copy()
+#     attributes_df = attributes_df.drop(columns = column_to_drop)
+#     attributes_df = attributes_df.drop(columns = [downID, linkage_flag])
+    
+#     # keep the needed columns only
+#     df = df [[ID, downID, linkage_flag]]
+    
+#     # Create a directed graph
+#     G = nx.DiGraph()
+
+#     # Add edges from DataFrame with attributes
+#     for _, row in df.iterrows():
+#         if row[downID] > -0.01:  # Ignore nodes with negative downstream
+#             G.add_edge(row[downID], row[ID], linkage_flag_G=row[linkage_flag])
+
+#     # Contract edges based on linkage attribute being 1; in tdx hydro they are just linking
+#     edges_to_contract = [(u, v) for u, v, d in G.edges(data=True) if d.get('linkage_flag_G') == 1]
+#     for u, v in edges_to_contract:
+#         G = nx.contracted_edge(G, (u, v), self_loops=False)
+    
+#     # convert to pandas dataframe
+#     updated_df = [(u, v, d) for u, v, d in G.edges(data=True)]
+#     updated_df = pd.DataFrame(updated_df, columns=[downID, ID, 'attributes'])
+#     updated_df = updated_df.drop(columns = ['attributes'])
+#     updated_df[ID] = updated_df[ID].astype(int)
+    
+#     print(len(updated_df))
+#     print(len(attributes_df))
+    
+#     # add attributes
+#     updated_df = pd.merge(updated_df, attributes_df, on=ID, how='inner')
+    
+#     print(len(updated_df))
+#     print(len(attributes_df))
+    
+#     # add immidiate upstream and update
+#     updated_df = add_immediate_upstream (updated_df)
+    
+    # # return
+    # return updated_df        
 
 def prepare_ntopo(
     riv: gpd.GeoDataFrame,
@@ -394,6 +564,10 @@ def prepare_ntopo(
         }
         # Convert columns to specified data types
         river = river.astype(data_types)
+        
+    elif network.lower() == 'tdx':
+        river = river
+        cat = cat
         
     else:
         sys.exit('The network topology is not recognized; it should be merit, hdma, tdx')
@@ -595,3 +769,50 @@ def create_nc_ntopo(riv,
         
     # return the ntopo xarray object
     return ntopo
+
+def add_immediate_upstream (df,
+                            mapping = {'id':'LINKNO','next_id':'DSLINKNO'}):
+    
+    # this function add immediate segment of upstream for a river network if not provided
+    # it first convert the df into a networkx derected graph, finds the sucessores for
+    # river segments, provide the maximume existing upstream segments in column called maxup
+    # and the values in up1, up2, up3, etc
+    
+    # get the name of ID and downID
+    downID = mapping.get('next_id')
+    ID = mapping.get('id')
+    
+    # Create a directed graph
+    G = nx.DiGraph()
+
+    # Add edges from the DataFrame (reversing the direction)
+    for _, row in df.iterrows():
+        if row[downID] > -0.01:  # Skip nodes with negative downstream
+            G.add_edge(row[downID], row[ID])
+
+    # Find immediate upstream nodes for each node
+    immediate_upstream = {}
+    for node in G.nodes():
+        immediate_upstream[node] = list(G.successors(node))
+
+    # Create a new column containing lists of immediate upstream nodes
+    df['upstream'] = df[ID].apply(lambda x: immediate_upstream[x] if x in immediate_upstream else [])
+
+    # Find the maximum length of the lists in the 'upstream' column
+    df['maxup'] = 0
+    df['maxup'] = df['upstream'].apply(len)
+
+    # Create new columns 'maxup', 'up1', 'up2', 'up3', etc.
+    max_length = df['maxup'].max()
+    if max_length > 0:
+        for i in range(max_length):
+            df[f'up{i + 1}'] = df['upstream'].apply(lambda x: x[i] if i < len(x) else 0)
+    else:
+        print('It seems there is no upstream segment for the provided river network. '+\
+              'This may mean the river network you are working may have first order rivers '+\
+              'that are not connected.')
+    
+    # drop upstream 
+    df = df.drop(columns = 'upstream')
+        
+    return df
