@@ -56,12 +56,12 @@ def create_nc_ntopo(riv,
         
         # add the units to the variables using pint
         ntopo = ntopo.pint.quantify({'length': 'km',
-                                     'area': 'km**2',
+                                     'unitarea': 'km**2',
                                      'uparea': 'km**2'})
         
         # convert dictionary
         convert = {'length': 'm',
-                   'area': 'm**2',
+                   'unitarea': 'm**2',
                    'uparea': 'm**2'}
         
         # covert the units in ntopo
@@ -145,6 +145,10 @@ def reorder_output(file_name,
     
     #
     files = sorted(glob.glob(file_name))
+    
+    # check if files are not empty
+    if not files:
+        sys.exit('no file is identified, check the input file name')
     
     if len(files)>1:
         print('The number of files passed to function is larger than 1. '+\

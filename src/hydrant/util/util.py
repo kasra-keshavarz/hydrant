@@ -32,7 +32,7 @@ def mesh_output_txt_to_nc(csv_name,
                           variable_dim_name = 'n',
                           unit_of_variable = ' ',
                           variable_long_name = ' ',
-                          Fill_value = '-9999',
+                          Fill_value = -9999.00,
                           ddb_file = None,
                           rank_var_ddb = None,
                           segID_var_ddb = None,
@@ -69,9 +69,11 @@ def mesh_output_txt_to_nc(csv_name,
             Data['segID'] = xr.DataArray(ddb[segID_var_ddb].values, dims=(variable_dim_name,))
             
     if not nc_file_to_save is None:
+        # create the encoding for fill value
+        encoding = {variable_name: {'_FillValue': Fill_value}}
         if os.path.isfile(nc_file_to_save):
             os.remove(nc_file_to_save)
-        Data.to_netcdf(nc_file_to_save)
+        Data.to_netcdf(nc_file_to_save, encoding=encoding)
     
     return Data
 
