@@ -331,7 +331,6 @@ def tdx_contraction_of_linkage  (df,
     
     # return
     return df
-    
 
     
 #     # keep the needed columns and drop the columns that will be replace
@@ -710,7 +709,7 @@ def box_to_geometry(
 
 def create_nc_ntopo(riv,
                     cat,
-                    network = 'merit'): # can be merit, hdma, or tdx
+                    network): # can be hdma, or tdx
     
     if network.lower() == 'merit':
         
@@ -736,12 +735,12 @@ def create_nc_ntopo(riv,
         
         # add the units to the variables using pint
         ntopo = ntopo.pint.quantify({'length': 'km',
-                                     'area': 'km**2',
+                                     'unitarea': 'km**2',
                                      'uparea': 'km**2'})
         
         # convert dictionary
         convert = {'length': 'm',
-                   'area': 'm**2',
+                   'unitarea': 'm**2',
                    'uparea': 'm**2'}
         
         # covert the units in ntopo
