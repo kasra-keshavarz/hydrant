@@ -1,11 +1,10 @@
 """
-Common functions for creating network topology for mizuRoute and read,
-re-order mizuRoute output for analysis and visualzaition
+Common functions for manupulating the gis outfput from other sources
 """
 
 import pandas as pd
+import numpy as np
 from typing import Dict, Union
-import pandas as pd
 from itertools import product
 import sys
 
@@ -83,7 +82,6 @@ def intersect_df(*dfs: pd.DataFrame,
     
     # turn input into list
     dfs = list(dfs)
-    #print(dfs)
     
     # Check if mappings are provided
     if df_mappings is None:
@@ -122,7 +120,7 @@ def intersect_df(*dfs: pd.DataFrame,
     
     # Generate combinations and calculate products
     combinations = list(product(*(df.columns for df in dfs)))
-    result = pd.DataFrame(columns=[f'({", ".join(cols)})' for cols in combinations], \
+    result = pd.DataFrame(columns=[f'{" ".join(cols)}' for cols in combinations], \
                           index=dfs[0].index)
     combination_list = []
     
@@ -132,11 +130,16 @@ def intersect_df(*dfs: pd.DataFrame,
         for i in range(1, len(dfs)):
             col_product = col_product * dfs[i][cols[i]] # multiply the product
         # update the results
-        result[f'({", ".join(cols)})'] = col_product
+        result[f'{" ".join(cols)}'] = col_product
         
         # keep the positive or existing combinations
-        if sum(col_product) > 0:
+        if (sum(col_product)>0):
             combination_list.append(' '.join(cols))
+        elif (sum(col_product)==0):
+            if not remove_zero_combinations:
+                combination_list.append(' '.join(cols))
+        else:
+            sys.exit("sum of columns cannot be negative")
     
     # total number of non zero combinations:
     print('total number of non zero combinations: ',len(combination_list)) 
@@ -144,14 +147,22 @@ def intersect_df(*dfs: pd.DataFrame,
     # Report combinations with non-zero values
     report = pd.DataFrame(combination_list, columns=['Combinations'])
     # Split combinations into separate columns based on DataFrame columns
-    for i, df in enumerate(dfs, start=0):
-        report[f'{chr(65 + i)}'] = report['Combinations'].apply(lambda x: x.split()[i - 1])
-        report[f'{chr(65 + i)}'+'_int'] = report[f'{chr(65 + i)}'].str.extract(r'(\d+)')
+    for idx, df in enumerate(dfs, start=0):
+        mapping = df_mappings.get(f'df{idx+1}', {})
+        data_name = mapping.get('data_name', f'Data_{idx+1}')
+        report[data_name] = report['Combinations'].apply(lambda x: x.split()[idx])
+        report[data_name] = report[data_name].str.extract(r'(\d+)')  # f'{chr(65 + i)}'
+    report ['comb'] = np.arange(len(report))+1
     
     # remove the zero combination from result dataframe
     if remove_zero_combinations:
         zeros_columns = result.columns[(result == 0).all()]  # Get columns with all zeros
         # Drop columns that consist entirely of zeros
         result = result.drop(zeros_columns, axis=1)
+        
+    # rename the result header to 1 to n
+    for i, col in enumerate(result.columns, start=1):
+        new_col_name = f'comb_{i:04d}'  # Using f-string to format column names
+        result.rename(columns={col: new_col_name}, inplace=True)
     
     return result , report
