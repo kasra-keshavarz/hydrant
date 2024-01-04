@@ -1,0 +1,16 @@
+,Combinations,soil,LULC,comb
+0,soil3 LULC1,3,1,1
+1,soil3 LULC5,3,5,2
+2,soil3 LULC6,3,6,3
+3,soil3 LULC8,3,8,4
+4,soil3 LULC10,3,10,5
+5,soil3 LULC14,3,14,6
+6,soil3 LULC15,3,15,7
+7,soil3 LULC16,3,16,8
+8,soil3 LULC17,3,17,9
+9,soil3 LULC18,3,18,10
+10,soil3 LULC19,3,19,11
+11,soil8 LULC1,8,1,12
+12,soil8 LULC10,8,10,13
+13,soil8 LULC16,8,16,14
+14,soil8 LULC19,8,19,15
