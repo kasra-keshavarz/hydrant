@@ -9,6 +9,8 @@ import geopandas as gpd
 import sys
 from itertools import product
 import re
+import xarray as xr
+import os
 
 
 def GeoClass (combination,
@@ -95,6 +97,9 @@ def GaoData (*dfs: pd.DataFrame,
     merged_df = merged_df.sort_values(by='up_area').reset_index(drop=True)
     merged_df = merged_df.drop(columns=['up_area'])
     merged_df.to_csv(outfile, sep='\t', index=False)
+    
+    # return 
+    return merged_df
 
 def rename_columns (df,
                     rename_dict: Dict[str, str] = None,
@@ -196,3 +201,78 @@ or land cover for key: '+ key)
                     file.write(f"{key}\t{value['value']}\t{value['comment']}\n")
             else:
                 file.write(dictionary['section_head']+"\n")
+                
+
+def sample_forcing (ID,
+                    out_folder = './'):
+    
+    
+    # create a smaple forcing file
+    import datetime
+
+    # List of column names
+    columns = list (ID)
+
+    # Start date and end date
+    start_date = datetime.date(2023, 10, 1)
+    end_date = start_date + datetime.timedelta(days=9)  # 10 days
+
+    # List of dates for 10 days
+    dates = [start_date + datetime.timedelta(days=i) for i in range(10)]
+
+    # Create DataFrame
+    df = pd.DataFrame(columns=columns, index=dates)
+    df.index = pd.to_datetime(df.index)
+    
+    # round values
+    df = df.round(3)
+    
+    # Pobs
+    # name index to data and save as txt
+    for col in columns:
+        df[col] = np.random.uniform(0, 1, size=len(dates))
+    # name index to time
+    ds = xr.Dataset({'Pobs': (['time', 'id'], df.values.astype(float))},
+             coords={'time': df.index, 'id': df.columns})
+    # save
+    df.to_csv(out_folder+'Pobs.txt', sep='\t', na_rep='', index_label='Date', float_format='%.2f')
+    if os.path.isfile (out_folder+'Pobs.nc'):
+        os.remove (out_folder+'Pobs.nc')
+    ds.to_netcdf(out_folder+'Pobs.nc', encoding = {'Pobs':{'_FillValue': -9999.0}})
+
+    # Tobs
+    for i, col in enumerate(columns):
+        # Generate values from -5 to +5 for each column
+        df[col] = [(i % 11) - 5 for i in range(len(dates))]
+    # name index to time
+    ds = xr.Dataset({'Tobs': (['time', 'id'], df.values.astype(float))},
+             coords={'time': df.index, 'id': df.columns})
+    # save
+    df.to_csv(out_folder+'Tobs.txt', sep='\t', na_rep='', index_label='Date', float_format='%.2f')
+    if os.path.isfile (out_folder+'Tobs.nc'):
+        os.remove (out_folder+'Tobs.nc')
+    ds.to_netcdf(out_folder+'Tobs.nc', encoding = {'Tobs':{'_FillValue': -9999.0}})
+    
+    # TMAXobs
+    for col in columns:
+        df[col] = df[col]+1
+    # name index to time
+    ds = xr.Dataset({'TMAXobs': (['time', 'id'], df.values.astype(float))},
+             coords={'time': df.index, 'id': df.columns})
+    # save
+    df.to_csv(out_folder+'TMAXobs.txt', sep='\t', na_rep='', index_label='Date', float_format='%.2f')
+    if os.path.isfile (out_folder+'TMAXobs.nc'):
+        os.remove (out_folder+'TMAXobs.nc')
+    ds.to_netcdf(out_folder+'TMAXobs.nc', encoding = {'TMAXobs':{'_FillValue': -9999.0}})
+    
+    # TMINobs
+    for col in columns:
+        df[col] = df[col]-2
+    # name index to time
+    ds = xr.Dataset({'TMINobs': (['time', 'id'], df.values.astype(float))},
+             coords={'time': df.index, 'id': df.columns})
+    # save
+    df.to_csv(out_folder+'TMINobs.txt', sep='\t', na_rep='', index_label='Date', float_format='%.2f')
+    if os.path.isfile (out_folder+'TMINobs.nc'):
+        os.remove (out_folder+'TMINobs.nc')
+    ds.to_netcdf(out_folder+'TMINobs.nc', encoding = {'TMINobs':{'_FillValue': -9999.0}})
