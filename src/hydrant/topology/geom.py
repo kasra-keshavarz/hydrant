@@ -9,6 +9,8 @@ import geopandas  as gpd
 import pandas     as pd
 import os
 import sys
+import xarray as xr
+import pint_xarray
 
 from typing import (
     Optional,
@@ -475,6 +477,9 @@ def prepare_ntopo(
         # 'next_id's are the same
         river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
         
+        # next ID is zero! replace with outlet_val
+        river.loc[river[riv_col_next_id] == 0, riv_col_next_id] = outlet_val
+        
         # pass the unit area from cat
         river['unitarea'] = 0
         river['unitarea'] = cat['unitarea']
@@ -573,6 +578,11 @@ def prepare_ntopo(
     else:
         sys.exit('The network topology is not recognized; it should be merit, hdma, tdx')
     
+    # add rank, which is define in routing model <add name> and MESH model
+    river = extract_rank(river,
+                         mapping = riv_cols,
+                         outlet_value = outlet_val)
+    
     # return
     return river, cat
 
@@ -659,6 +669,11 @@ def subset_ntopo(
     cat_clipped.reset_index(drop=True, inplace=True)
     riv_clipped.reset_index(drop=True, inplace=True)
     
+    # add rank, which is define in routing model <add name> and MESH model
+    riv_clipped = extract_rank(riv_clipped,
+                               mapping = riv_cols,
+                               outlet_value = outlet_val)
+    
     # return
     return cat_clipped, riv_clipped
 
@@ -709,7 +724,7 @@ def box_to_geometry(
     return gpd.GeoDataFrame(index=[0], crs=f'epsg:{crs}', geometry=[geometry])
 
 
-def create_nc_ntopo(riv,
+def create_xr_ntopo(riv,
                     cat,
                     network): # can be hdma, or tdx
     
@@ -818,212 +833,259 @@ def add_immediate_upstream (df,
         
     return df
 
+def longest_branch(
+    riv: gpd.GeoDataFrame,
+    main_id: Union[str, int] = None,
+    ds_main_id: Union[str, int] = None,
+) -> List[int]:
+    """Returns nodes of the longest branch of a river network
 
-# def extract_rank_next(
-#     seg: Iterable,
-#     ds_seg: Iterable,
-#     outlet_value: int = -9999,
-# ) -> Tuple[np.ndarray, ...]:
-#     '''Producing rank_var and next_var variables needed for 
-#     MESH modelling
-    
-#     Parameters
-#     ----------
-#     seg : array-like or list-like
-#         The ordered list (or array) of segment IDs corresponding
-#         to river reaches presented in an area of interest
-#     ds_seg : array-like or list-like
-#         The ordered list (or array) of downstream segment IDs
-#         corresponding to those of `seg_id` elements
-#     outlet_value : int, [defaults to -9999]
-#         The outlet value assigned to `to_segment` indicating
-#         sinking from the system
-    
-    
-#     Returns
-#     -------
-#     rank_var: numpy.array of int
-#         The 'rank_var' of each segment ID produced based on
-#         MESH modelling standards
-#     next_var: numpy.array of int
-#         The 'next_var' variable indicating the downstream segment
-#         of river reaches corresponding to 'rank_var'
-#     seg_id: numpy.array of int
-#         The 'seg_id' that has been reordered to match values of
-#         `rank_var` and `next_var`.
-#     to_segment: numpy.array of int
-#         The 'to_segment' that has been reordered to match values
-#         of `rank_var` and `next_var`.
-    
-    
-#     Notes
-#     -----
-#     The function is mainly developed by Dr. Ala Bahrami at
-#     <ala.bahrami@usask.ca> and Cooper Albano <cooper.albano@usask.ca>
-#     as part of the North American MESH model workflow development.
-#     Minor changes have been implemented by Kasra Keshavarz
-#     <kasra.keshavarz1@ucalgary.ca>.
-
-#     The original workflow is located at the following link:
-#     https://github.com/MESH-Model/MESH-Scripts
-#     <last accessed on August 29th, 2023>
-#     '''
-
-#     # extracting numpy array out of input iterables
-#     seg_arr = np.array(seg)
-#     ds_seg_arr = np.array(ds_seg)
-
-#     # re-order ids to match MESH's requirements
-#     seg_id, to_segment = _adjust_ids(seg_arr, ds_seg_arr)
-
-#     # Count the number of outlets
-#     outlets = np.where(to_segment == outlet_value)[0]
-
-#     # Search over to extract the subbasins drain into each outlet
-#     rank_var_id_domain = np.array([]).astype(int)
-#     outlet_number = np.array([]).astype(int)
-
-#     for k in range(len(outlets)):
-#         # initial step
-#         seg_id_target = seg_id[outlets[k]]
-#         # set the rank_var of the outlet
-#         rank_var_id = outlets[k]
-
-#         # find upstream seg_ids draining into the chosen outlet [indexed `k`]
-#         while (np.size(seg_id_target) >= 1):
-#             if (np.size(seg_id_target) == 1):
-#                 r = np.where(to_segment == seg_id_target)[0]
-#             else:
-#                 r = np.where(to_segment == seg_id_target[0])[0]
-#             # updated the target seg_id
-#             seg_id_target = np.append(seg_id_target, seg_id[r])
-#             # remove the first searched target
-#             seg_id_target = np.delete(seg_id_target, 0, 0)
-#             if (len(seg_id_target) == 0):
-#                 break
-#             # update the rank_var_id
-#             rank_var_id = np.append(rank_var_id, r)
-#         rank_var_id = np.flip(rank_var_id)
-#         if (np.size(rank_var_id) > 1):
-#             outlet_number = np.append(outlet_number,
-#                                       (k)*np.ones((len(rank_var_id), 1)).astype(int))
-#         else:
-#             outlet_number = np.append(outlet_number, (k))
-#         rank_var_id_domain = np.append(rank_var_id_domain, rank_var_id)
-#         rank_var_id = []
-
-#     # reorder seg_id and to_segment
-#     seg_id = seg_id[rank_var_id_domain]
-#     to_segment = to_segment[rank_var_id_domain]
-
-#     # rearrange outlets to be consistent with MESH outlet structure
-#     # In MESH outlets should be placed at the end of the `NEXT` variable
-#     na = len(rank_var_id_domain)
-#     fid1 = np.where(to_segment != outlet_value)[0]
-#     fid2 = np.where(to_segment == outlet_value)[0]
-#     fid = np.append(fid1, fid2)
-
-#     rank_var_id_domain = rank_var_id_domain[fid]
-#     seg_id = seg_id[fid]
-#     to_segment = to_segment[fid]
-#     outlet_number = outlet_number[fid]
-
-#     # construct rank_var and next_var variables
-#     next_var = np.zeros(na).astype(np.int32)
-
-#     for k in range(na):
-#         if (to_segment[k] != outlet_value):
-#             r = np.where(to_segment[k] == seg_id)[0] + 1
-#             next_var[k] = r
-#         else:
-#             next_var[k] = 0
-
-#     # Construct rank_var from 1:na
-#     rank_var = np.arange(1, na+1).astype(np.int32)
-
-#     return rank_var, next_var, seg_id, to_segment
-
-# def _adjust_ids(
-#     seg_id: np.ndarray,
-#     ds_seg_id: np.ndarray,
-# ) -> Tuple[np.ndarray, np.ndarray]:
-#     """
-#     [Temporary solution]: readjusts segments (and therefore downstream
-#     segments) to allow all segments to be in between the nodes of the
-#     longest branch found in a given river network
-#     """
-#     # function limited names for the segments and downstream
-#     # river segments
-#     main_id_str = 'main_id'
-#     ds_main_id_str = 'ds_main_id'
-
-#     # creating a pandas DataFrame of `seg_id` and `ds_seg_id`
-#     riv_df = pd.concat([pd.Series(arr) for arr in [seg_id, ds_seg_id]],
-#                        names=[main_id_str, ds_main_id_str],
-#                        axis=1)
-#     # naming columns, in case needed
-#     riv_df.columns = [main_id_str, ds_main_id_str]
-
-#     # extracting the longest branch out of "hydrant"
-#     longest_branch = longest_branch(riv=riv_df,
-#                                     main_id=main_id_str,
-#                                     ds_main_id=ds_main_id_str)
-
-#     # selecting first and last (while not counting the outlet value, so -2)
-#     first_node = longest_branch[0]
-#     last_node = longest_branch[-2]
-
-#     # extracting the index of first and last nodes
-#     first_idx = riv_df.index[riv_df[main_id_str] == first_node]
-#     last_idx = riv_df.index[riv_df[main_id_str] == last_node]
-
-#     # building new `riv_df` with new index values
-#     idx = pd.Index(first_idx.to_list() + riv_df.index.to_list())
-#     idx = idx.drop_duplicates(keep='first')
-#     idx = pd.Index(idx.to_list() + last_idx.to_list())
-#     idx = idx.drop_duplicates(keep='last')
-#     riv_df = riv_df.loc[idx]
-
-#     # reseting index, just to reassure
-#     riv_df.reset_index(drop=True, inplace=True)
-
-#     # extracting np.ndarrays
-#     new_seg_id = riv_df[main_id_str].to_numpy()
-#     new_ds_seg_id = riv_df[ds_main_id_str].to_numpy()
-
-#     return new_seg_id, new_ds_seg_id
-
-
-# def longest_branch(
-#     riv: gpd.GeoDataFrame,
-#     main_id: Union[str, int] = None,
-#     ds_main_id: Union[str, int] = None,
-# ) -> List[str, int]:
-#     """Returns nodes of the longest branch of a river network
-
-#     Parameters
-#     ----------
-#     riv : gpd.GeoDataFrame
-#         a geopandas.GeoDataFrame object containing the geometry,
-#         `main_id`, and `ds_main_id` of a river network
-#     main_id : str or int, defaults to `None`
-#         column label within `riv` corresponding to ID values of river
-#         segments
-#     ds_main_id : str or int, defaults to `None`
-#         column label within `riv` corresponding to downstream segments of
-#         each river
+    Parameters
+    ----------
+    riv : gpd.GeoDataFrame
+        a geopandas.GeoDataFrame object containing the geometry,
+        `main_id`, and `ds_main_id` of a river network
+    main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to ID values of river
+        segments
+    ds_main_id : str or int, defaults to `None`
+        column label within `riv` corresponding to downstream segments of
+        each river
         
-#     Returns
-#     -------
-#     nodes : set
-#         a set object containing river segment `main_id` calues of the
-#         longest branch found in `riv`
-#     """
-#     riv_graph = nx.from_pandas_edgelist(riv,
-#                                         source=main_id,
-#                                         target=ds_main_id,
-#                                         create_using=nx.DiGraph)
+    Returns
+    -------
+    nodes : set
+        a set object containing river segment `main_id` calues of the
+        longest branch found in `riv`
+    """
+    riv_graph = nx.from_pandas_edgelist(riv,
+                                        source=main_id,
+                                        target=ds_main_id,
+                                        create_using=nx.DiGraph)
 
-#     nodes = nx.dag_longest_path(riv_graph)
+    nodes = nx.dag_longest_path(riv_graph)
 
-#     return nodes
+    return nodes
+
+def _adjust_ids(
+    seg_id: np.ndarray,
+    ds_seg_id: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    [Temporary solution]: readjusts segments (and therefore downstream
+    segments) to allow all segments to be in between the nodes of the
+    longest branch found in a given river network
+    """
+    # function limited names for the segments and downstream
+    # river segments
+    main_id_str = 'main_id'
+    ds_main_id_str = 'ds_main_id'
+
+    # creating a pandas DataFrame of `seg_id` and `ds_seg_id`
+    riv_df = pd.concat([pd.Series(arr) for arr in [seg_id, ds_seg_id]],
+                       names=[main_id_str, ds_main_id_str],
+                       axis=1)
+    # naming columns, in case needed
+    riv_df.columns = [main_id_str, ds_main_id_str]
+
+    # extracting the longest branch out of "hydrant"
+    longest_branch_out = longest_branch(riv=riv_df,
+                                    main_id=main_id_str,
+                                    ds_main_id=ds_main_id_str)
+
+    # selecting first and last (while not counting the outlet value, so -2)
+    first_node = longest_branch_out[0]
+    last_node = longest_branch_out[-2]
+
+    # extracting the index of first and last nodes
+    first_idx = riv_df.index[riv_df[main_id_str] == first_node]
+    last_idx = riv_df.index[riv_df[main_id_str] == last_node]
+
+    # building new `riv_df` with new index values
+    idx = pd.Index(first_idx.to_list() + riv_df.index.to_list())
+    idx = idx.drop_duplicates(keep='first')
+    idx = pd.Index(idx.to_list() + last_idx.to_list())
+    idx = idx.drop_duplicates(keep='last')
+    riv_df = riv_df.loc[idx]
+
+    # reseting index, just to reassure
+    riv_df.reset_index(drop=True, inplace=True)
+
+    # extracting np.ndarrays
+    new_seg_id = riv_df[main_id_str].to_numpy()
+    new_ds_seg_id = riv_df[ds_main_id_str].to_numpy()
+
+    return new_seg_id, new_ds_seg_id
+
+
+def extract_rank(ntopo,
+                 mapping: Dict[str, str] = {'id':'COMID','next_id':'NextDownID'},
+                 outlet_value: int = -9999):
+    '''Producing rank_var and next_var variables needed for 
+    MESH modelling
+    
+    Parameters
+    ----------
+    seg : array-like or list-like
+        The ordered list (or array) of segment IDs corresponding
+        to river reaches presented in an area of interest
+    ds_seg : array-like or list-like
+        The ordered list (or array) of downstream segment IDs
+        corresponding to those of `seg_id` elements
+    outlet_value : int, [defaults to -9999]
+        The outlet value assigned to `to_segment` indicating
+        sinking from the system
+    
+    
+    Returns
+    -------
+    rank_var: numpy.array of int
+        The 'rank_var' of each segment ID produced based on
+        MESH modelling standards
+    next_var: numpy.array of int
+        The 'next_var' variable indicating the downstream segment
+        of river reaches corresponding to 'rank_var'
+    seg_id: numpy.array of int
+        The 'seg_id' that has been reordered to match values of
+        `rank_var` and `next_var`.
+    to_segment: numpy.array of int
+        The 'to_segment' that has been reordered to match values
+        of `rank_var` and `next_var`.
+    
+    
+    Notes
+    -----
+    The function is mainly developed by Dr. Ala Bahrami at
+    <ala.bahrami@usask.ca> and Cooper Albano <cooper.albano@usask.ca>
+    as part of the North American MESH model workflow development.
+    Minor changes have been implemented by Kasra Keshavarz
+    <kasra.keshavarz1@ucalgary.ca>.
+
+    The original workflow is located at the following link:
+    https://github.com/MESH-Model/MESH-Scripts
+    <last accessed on August 29th, 2023>
+    '''
+    
+    # # sort based on up area
+    # ntopo = ntopo.sort_values(by = 'uparea')
+    # ntopo = ntopo.reset_index(drop = True)
+    # ntopo['NextDownID'].iloc[38715] = -9999
+    # print(ntopo)
+    
+    # ID column
+    ID_column = mapping.get('id')
+    ID_next_column = mapping.get('next_id')
+    
+    # extracting numpy array out of input iterables
+    seg_arr = np.array(ntopo[ID_column])
+    ds_seg_arr = np.array(ntopo[ID_next_column])
+    
+    print(seg_arr)
+    print(ds_seg_arr)
+
+    # re-order ids to match MESH's requirements
+    seg_id, to_segment = _adjust_ids(seg_arr, ds_seg_arr)
+
+    # Count the number of outlets
+    outlets = np.where(to_segment == outlet_value)[0]
+
+    # Search over to extract the subbasins drain into each outlet
+    rank_var_id_domain = np.array([]).astype(int)
+    outlet_number = np.array([]).astype(int)
+
+    for k in range(len(outlets)):
+        # initial step
+        seg_id_target = seg_id[outlets[k]]
+        # set the rank_var of the outlet
+        rank_var_id = outlets[k]
+
+        # find upstream seg_ids draining into the chosen outlet [indexed `k`]
+        while (np.size(seg_id_target) >= 1):
+            if (np.size(seg_id_target) == 1):
+                r = np.where(to_segment == seg_id_target)[0]
+            else:
+                r = np.where(to_segment == seg_id_target[0])[0]
+            # updated the target seg_id
+            seg_id_target = np.append(seg_id_target, seg_id[r])
+            # remove the first searched target
+            seg_id_target = np.delete(seg_id_target, 0, 0)
+            if (len(seg_id_target) == 0):
+                break
+            # update the rank_var_id
+            rank_var_id = np.append(rank_var_id, r)
+        rank_var_id = np.flip(rank_var_id)
+        if (np.size(rank_var_id) > 1):
+            outlet_number = np.append(outlet_number,
+                                      (k)*np.ones((len(rank_var_id), 1)).astype(int))
+        else:
+            outlet_number = np.append(outlet_number, (k))
+        rank_var_id_domain = np.append(rank_var_id_domain, rank_var_id)
+        rank_var_id = []
+
+    # reorder seg_id and to_segment
+    seg_id = seg_id[rank_var_id_domain]
+    to_segment = to_segment[rank_var_id_domain]
+
+    # rearrange outlets to be consistent with MESH outlet structure
+    # In MESH outlets should be placed at the end of the `NEXT` variable
+    na = len(rank_var_id_domain)
+    fid1 = np.where(to_segment != outlet_value)[0]
+    fid2 = np.where(to_segment == outlet_value)[0]
+    fid = np.append(fid1, fid2)
+
+    rank_var_id_domain = rank_var_id_domain[fid]
+    seg_id = seg_id[fid]
+    to_segment = to_segment[fid]
+    outlet_number = outlet_number[fid]
+
+    # construct rank_var and next_var variables
+    next_var = np.zeros(na).astype(np.int32)
+
+    for k in range(na):
+        if (to_segment[k] != outlet_value):
+            r = np.where(to_segment[k] == seg_id)[0] + 1
+            next_var[k] = r
+        else:
+            next_var[k] = 0
+
+    # Construct rank_var from 1:na
+    rank_var = np.arange(1, na+1).astype(np.int32)
+    
+    
+    # pass the varibales into a dataframe
+    df = pd.DataFrame()
+
+    # Add additional variables to the DataFrame
+    df['Rank'] = rank_var
+    df['Rank_Next'] = next_var
+    df['seg_id'] = seg_id
+    df['to_segment'] = to_segment
+    
+    # sort df based on seg_id
+    df = df.sort_values(by='seg_id')
+    df = df.reset_index(drop=True)
+    
+    # sort the input based on the seg_id also
+    ntopo = ntopo.sort_values(by = ID_column)
+    ntopo = ntopo.reset_index(drop=True)
+    
+    # Check if 'seg_id' and 'id' columns have exactly the same values after sorting
+    ids_equal = sum (np.array(df['seg_id']) - np.array(ntopo[ID_column]) )
+    
+    if ids_equal != 0:
+        sys.exit("The 'seg_id' in df and 'id' in ntopo do not have the same values after sorting.")
+        
+    # sort based on Rank and Next index
+    ntopo['Rank'] = df['Rank']
+    ntopo['Rank_Next'] = df['Rank_Next']
+    ntopo = ntopo.sort_values(by = 'Rank')
+    ntopo = ntopo.reset_index(drop = True)
+    # Convert columns to specified data types
+    data_types = {
+        'Rank': int,       
+        'Rank_Next': int
+    }
+    ntopo = ntopo.astype(data_types)
+
+    return ntopo
+

@@ -7,6 +7,7 @@ import numpy as np
 from typing import Dict, Union
 from itertools import product
 import sys
+import xarray as xr
 
 def manipulating_fractions (df,
                             df_mapping: Dict[str, str] = {'prefix': 'Frac_'}, # {'id':'ID', 'prefix': 'Frac_'}
@@ -165,4 +166,12 @@ def intersect_df(*dfs: pd.DataFrame,
         new_col_name = f'comb_{i:04d}'  # Using f-string to format column names
         result.rename(columns={col: new_col_name}, inplace=True)
     
+    # to xarray dataframe
+    ds_result = result.to_xarray()
+    ds_report = report.to_xarray()
+    ds = xr.merge([ds_result, ds_report])
+    print(ds)
+    
     return result , report
+    
+    
