@@ -29,7 +29,7 @@ def GeoClass (combination,
     combination = combination[['SLC','landcover','soil']]
     
     # populate the extra rows
-    combination['Main crop cropid'] = 0
+    combination.loc['Main crop cropid'] = 0
     combination['Second crop cropid'] = 0
     combination['Crop rotation group'] = 0
     combination['Vegetation type'] = 1
@@ -100,107 +100,113 @@ def GaoData (*dfs: pd.DataFrame,
     # return 
     return merged_df
 
-def rename_columns (df,
-                    rename_dict: Dict[str, str] = None,
-                    keep_renamed_only = True):
-    
-    # initialize column name list
-    col_name_list = []
-    
-    # loop over the key and values of the rename_dictionary
-    for key, value in rename_dict.items():
-        
-        # find the level of columns that start from the given key
-        filtered_cols = sorted(col for col in df.columns if col.startswith(value))
-        
-        if len(filtered_cols) > 1: # multiple columns start with given key
+    def rename_columns (self,
+                        df,
+                        rename_dict: Dict[str, str] = None,
+                        keep_renamed_only = True):
 
-            # loop over each col name and rename it based on 
-            for filtered_col in filtered_cols:
-            
-                # Extract the numeric part from the string
-                numeric_part = re.search(r'\d+', filtered_col).group()
+        # initialize column name list
+        col_name_list = []
 
-                # Convert the numeric part to an integer
-                numeric_value = int(numeric_part)
+        # loop over the key and values of the rename_dictionary
+        for key, value in rename_dict.items():
 
-                # Create the new string with key and the numeric value
-                new_string = f'{key}{numeric_value}'
-                
-                # rename the columns
-                df = df.rename(columns={filtered_col:new_string})
-                
-                # append to keep the new name of the column
-                col_name_list.append(new_string)
-                
-        elif len(filtered_cols) == 1: # only one column exists to be renamed
-            
-            # rename the existing columns
-            df = df.rename(columns={filtered_cols[0]:key})
-            col_name_list.append(key)
-            
-        else:
-            
-            print('there is no column name called ' + value + ' in the dataframe')
-            
-    # subset the input dataframe for given renamed columns
-    if keep_renamed_only:
-        df = df [col_name_list]
-    
-    # return
-    return df
-    
+            # find the level of columns that start from the given key
+            filtered_cols = sorted(col for col in df.columns if col.startswith(value))
 
+            if len(filtered_cols) > 1: # multiple columns start with given key
 
-def Parameters (output_file,
-                infile = None,
-                soil_number = 12,
-                soil_type = "usda",
-                land_cover_number = 19,
-                land_cover_type = "cec"):
-    
-    # 
-    from .HYPE_default_dict import General
-    
-    # write general
-    for dictionary in General.values():
-        write_dictionary(output_file, dictionary)
-    
-    # soil type
-    if soil_type.lower() == 'usda':
-        print('inside soil')
-        from .HYPE_default_dict import USDA
-        print(USDA)
-        # write general
-        for dictionary in USDA.values():
-            write_dictionary(output_file, dictionary, num = soil_number)
-                
-    # land cover
-    if land_cover_type.lower() == 'cec':
-        print('inside alnd cover')
-        from .HYPE_default_dict import CEC
-        print(CEC)
-        # write general
-        for dictionary in CEC.values():
-            write_dictionary(output_file, dictionary, num = land_cover_number)
+                # loop over each col name and rename it based on 
+                for filtered_col in filtered_cols:
 
+                    # Extract the numeric part from the string
+                    numeric_part = re.search(r'\d+', filtered_col).group()
 
-def write_dictionary(output_file, dictionary, num = None):
-    with open(output_file, 'a') as file:
-        for key, value in dictionary.items():
-            if key != 'section_head':
-                if isinstance(value['value'], list):
-                    if not num is None: # check the length
-                        if num != len(value['value']):
-                            sys.exit('the list is not with the same length as soil\
-or land cover for key: '+ key)
-                    values_line = '\t'.join(map(str, value['value']))
-                    file.write(f"{key}\t{values_line}\t{value['comment']}\n")
-                else:
-                    file.write(f"{key}\t{value['value']}\t{value['comment']}\n")
+                    # Convert the numeric part to an integer
+                    numeric_value = int(numeric_part)
+
+                    # Create the new string with key and the numeric value
+                    new_string = f'{key}{numeric_value}'
+
+                    # rename the columns
+                    df = df.rename(columns={filtered_col:new_string})
+
+                    # append to keep the new name of the column
+                    col_name_list.append(new_string)
+
+            elif len(filtered_cols) == 1: # only one column exists to be renamed
+
+                # rename the existing columns
+                df = df.rename(columns={filtered_cols[0]:key})
+                col_name_list.append(key)
+
             else:
-                file.write(dictionary['section_head']+"\n")
-                
+
+                print('there is no column name called ' + value + ' in the dataframe')
+
+        # subset the input dataframe for given renamed columns
+        if keep_renamed_only:
+            df = df [col_name_list]
+
+        # return
+        return df
+    
+
+
+    def Parameters (self,
+                    output_file,
+                    soil_infile = None,
+                    soil_number = 12,
+                    soil_type = "usda",
+                    land_cover_infile = None,
+                    land_cover_number = 19,
+                    land_cover_type = "cec"):
+
+        # 
+        from .HYPE_default_dict import General
+
+        # write general
+        for dictionary in General.values():
+            write_dictionary(output_file, dictionary)
+
+        # soil type
+        if soil_type.lower() == 'usda':
+            print('inside soil')
+            from .HYPE_default_dict import USDA
+            print(USDA)
+            # write general
+            for dictionary in USDA.values():
+                self.write_dictionary(output_file, dictionary, num = soil_number)
+
+        # land cover
+        if land_cover_type.lower() == 'cec':
+            print('inside alnd cover')
+            from .HYPE_default_dict import CEC
+            print(CEC)
+            # write general
+            for dictionary in CEC.values():
+                self.write_dictionary(output_file, dictionary, num = land_cover_number)
+
+
+    def write_dictionary(self,
+                         output_file,
+                         dictionary,
+                         num = None):
+        with open(output_file, 'a') as file:
+            for key, value in dictionary.items():
+                if key != 'section_head':
+                    if isinstance(value['value'], list):
+                        if not num is None: # check the length
+                            if num != len(value['value']):
+                                sys.exit('the list is not with the same length as soil\
+    or land cover for key: '+ key)
+                        values_line = '\t'.join(map(str, value['value']))
+                        file.write(f"{key}\t{values_line}\t{value['comment']}\n")
+                    else:
+                        file.write(f"{key}\t{value['value']}\t{value['comment']}\n")
+                else:
+                    file.write(dictionary['section_head']+"\n")
+
 
 def sample_forcing (ID,
                     out_folder = './'):

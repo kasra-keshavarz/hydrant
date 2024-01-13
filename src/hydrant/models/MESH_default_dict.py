@@ -350,7 +350,7 @@ CEC = {
 """BowBanff                                                                  01 TITLE
   MESH Workflow                                                             02 NAME
   UofC                                                                                  03 PLACE
-     51.59   -116.41     40.00     40.00     50.00   -1.0    1 51   19   04 DEGLAT/DEGLON/ZRFM/ZRFH/ZBLD/GC/ILW/NL/NM
+     51.59   -116.41     40.00     40.00     50.00   -1.0    1 51   temp_land_cover_number   04 DEGLAT/DEGLON/ZRFM/ZRFH/ZBLD/GC/ILW/NL/NM
 """,
 'footer':
 """   
@@ -359,3 +359,4 @@ CEC = {
    0       0       0       0                                      22 IHOUR/IMINS/IJDAY/IYEAR
 """
 }
+
