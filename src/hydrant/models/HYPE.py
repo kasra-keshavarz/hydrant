@@ -68,7 +68,6 @@ def GaoData (*dfs: pd.DataFrame,
         ID = mapping.get('id', None)
         rename_dict = mapping.get('rename_dict', {})
         
-        
         # Set the ID column to index for the DataFrame
         if ID is not None:
             df.index = df[ID].astype(int)
@@ -161,7 +160,7 @@ def Parameters (output_file,
                 land_cover_type = "cec"):
     
     # 
-    from .default_dict import General
+    from .HYPE_default_dict import General
     
     # write general
     for dictionary in General.values():
@@ -170,7 +169,7 @@ def Parameters (output_file,
     # soil type
     if soil_type.lower() == 'usda':
         print('inside soil')
-        from .default_dict import USDA
+        from .HYPE_default_dict import USDA
         print(USDA)
         # write general
         for dictionary in USDA.values():
@@ -179,7 +178,7 @@ def Parameters (output_file,
     # land cover
     if land_cover_type.lower() == 'cec':
         print('inside alnd cover')
-        from .default_dict import CEC
+        from .HYPE_default_dict import CEC
         print(CEC)
         # write general
         for dictionary in CEC.values():
