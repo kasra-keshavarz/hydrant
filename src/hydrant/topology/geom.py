@@ -783,6 +783,11 @@ def create_xr_ntopo(riv,
         # to xarray object,
         ntopo = ntopo.to_xarray()
         
+    elif network.lower() == 'tdx':
+        
+        # to xarray object,
+        ntopo = ntopo.to_xarray()
+        
     # return the ntopo xarray object
     return ntopo
 
@@ -1065,9 +1070,13 @@ def extract_rank(ntopo,
     df = df.sort_values(by='seg_id')
     df = df.reset_index(drop=True)
     
+    print(df)
+    
     # sort the input based on the seg_id also
     ntopo = ntopo.sort_values(by = ID_column)
     ntopo = ntopo.reset_index(drop=True)
+    
+    print(ntopo)
     
     # Check if 'seg_id' and 'id' columns have exactly the same values after sorting
     ids_equal = sum (np.array(df['seg_id']) - np.array(ntopo[ID_column]) )
