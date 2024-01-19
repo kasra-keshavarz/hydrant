@@ -20,6 +20,7 @@ from typing import (
     Sequence,
     Iterable,
     List,
+    bool,
 )
 
 from .river_graph import find_upstream
@@ -32,14 +33,14 @@ def merit_read_file (
     cat_file_template: str,
     path_cst: Optional [str] = None,
     cst_file_template: Optional [str] = None):
-    
-    
+
+
     # initializaing empty geodataframe
     cat_all = gpd.GeoDataFrame()
     riv_all = gpd.GeoDataFrame()
-    
+
     for pafaf in pfafs:
-        
+
         # read files cat, riv, cst
         riv = gpd.read_file(os.path.join(path_riv, riv_file_template.replace('*', pafaf)))
         cat = gpd.read_file(os.path.join(path_cat, cat_file_template.replace('*', pafaf)))
@@ -52,29 +53,29 @@ def merit_read_file (
                                     cat_col_id = 'COMID')
         else:
             cst = None
-        
+
         # merge the cat and cst
         cat = merit_cat_cst_merge (cat,
                                    cst = cst)
-        
+
         # append the files
         riv_all = pd.concat([riv_all, riv])
         cat_all = pd.concat([cat_all, cat])
-    
+
     # sort COMID
     riv_all.sort_values(by='COMID', axis='index', inplace=True)
     riv_all.reset_index(drop=True, inplace=True)
-    
+
     # sort COMID
     cat_all.sort_values(by='COMID', axis='index', inplace=True)
     cat_all.reset_index(drop=True, inplace=True)
-    
+
     # set the projection
     riv_all.set_crs(epsg=4326, inplace=True, allow_override=True)
     cat_all.set_crs(epsg=4326, inplace=True, allow_override=True)
-    
+
     return riv_all, cat_all
-    
+
 
 def merit_cst_prepare(
     cst: gpd.GeoDataFrame,
@@ -119,7 +120,7 @@ def merit_cst_prepare(
 
     # assign `coastal_hillslope` flag
     cst['hillslope'] = 1
-    
+
     # drop FID column
     cst = cst.drop(columns = ['FID'])
 
@@ -137,13 +138,13 @@ def merit_cat_cst_merge (cat,
         The catchment object derived from `merit_read_file`.
     cst: geopandas.GeoDataFrame
         The costal hillslope object read in `merit_read_file`
-    
+
     Returns
     -------
     catchment: geopandas.GeoDataFrame
         combined cat and costal hillslope with their hillslope flag
     '''
-    
+
     cat['hillslope'] = 0
     if not cst is None:
         cst['hillslope'] = 1
@@ -154,60 +155,60 @@ def merit_cat_cst_merge (cat,
     # assign crs
     catchment.set_crs(epsg=crs, inplace=True)
     catchment.reset_index(drop=True, inplace=True)
-    
+
     return catchment
-    
+
 def hdma_read_file(
     regions: list,
     path_riv: str,
     riv_file_template: str,
     path_cat: str,
     cat_file_template: str):
-    
+
     # initializaing empty geodataframe
     cat_all = gpd.GeoDataFrame()
     riv_all = gpd.GeoDataFrame()
-    
+
     for region in regions:
-        
+
         # read files cat, riv, cst
         riv = gpd.read_file(os.path.join(path_riv, riv_file_template.replace('*', region)))
         cat = gpd.read_file(os.path.join(path_cat, cat_file_template.replace('*', region)))
-        
+
         # slice based on the region for cat
         riv = riv[(riv['seg_id'] >= 1000000*int(region)) & (riv['seg_id'] <= 1000000*int(region)+999999)]
-        
+
         # identifying hillslope catchments
         cat = hdma_assining_cst(riv,
                                 {'id':'seg_id'},
                                 cat,
                                 {'id':'hruid'})
-        
+
         # append the files
         riv_all = pd.concat([riv_all, riv])
         cat_all = pd.concat([cat_all, cat])
-        
+
     # return
     return riv_all, cat_all
-        
-        
+
+
 def hdma_assining_cst(riv,
                       riv_id,
                       cat,
                       cat_id):
-    
+
     # get the name of the colomns
     riv_col_id = riv_id.get('id')
     cat_col_id = cat_id.get('id')
-    
+
     # check if the IDs from river all in the cat
     if not riv[riv_col_id].isin(cat[cat_col_id]).all():
         sys.exit('it seems the river passed has river segments that are not in cat')
-        
-    # assign hillslope flag to ids that are not 
+
+    # assign hillslope flag to ids that are not
     cat ['hillslope'] = 0
     cat.loc[~cat[cat_col_id].isin(riv[riv_col_id]), 'hillslope'] = 1
-    
+
     # return
     return cat
 
@@ -217,30 +218,30 @@ def tdx_read_file  (codes:list,
                     path_cat: str,
                     cat_file_template: str,
                     prepare_for_ntopo = True):
-    
+
     # initializaing empty geodataframe
     cat_all = gpd.GeoDataFrame()
     riv_all = gpd.GeoDataFrame()
-    
+
     for code in codes:
-        
+
         # read files cat, riv, cst
         riv = gpd.read_file(os.path.join(path_riv, riv_file_template.replace('*', code)))
         cat = gpd.read_file(os.path.join(path_cat, cat_file_template.replace('*', code)))
-        
+
         # check if the length of riv is larger or equal to cat
         if len(riv) < len(cat):
             sys.exit('the length of river is smaller than the length of cat')
-        
+
         # add hillslope
         cat ['hillslope'] = 0
-        
+
         # add pfaf to riv and cat
         riv['pfafcode'] = int(code)
         cat['pfafcode'] = int(code)
-        
+
         if prepare_for_ntopo:
-        
+
             # identify the linkage
             riv, cat = tdx_identify_linkage(riv, cat)
 
@@ -262,11 +263,11 @@ def tdx_read_file  (codes:list,
             # pass area from the riv to cat
             riv['area'] = riv.apply(lambda x: x['DSContArea'] if x['strmOrder'] == 1 else x['DSContArea'] - x['USContArea'], axis=1)
             cat['area'] = riv ['area']
-        
+
         # append the files
         riv_all = pd.concat([riv_all, riv])
         cat_all = pd.concat([cat_all, cat])
-        
+
     # sort based on ID and pfaf
     riv_all.sort_values(by=['LINKNO', 'pfafcode'], axis='index', inplace=True)
     riv_all.reset_index(drop=True, inplace=True)
@@ -278,12 +279,12 @@ def tdx_read_file  (codes:list,
     # set the projection
     riv_all.set_crs(epsg=4326, inplace=True, allow_override=True)
     cat_all.set_crs(epsg=4326, inplace=True, allow_override=True)
-        
+
     return riv_all, cat_all
-                    
+
 def tdx_identify_linkage(riv,
                          cat):
-    
+
     # identify the linkage in the river
     riv_slice = riv.copy()
     riv_slice = riv_slice[~riv_slice['LINKNO'].isin(cat['streamID'])]
@@ -291,22 +292,22 @@ def tdx_identify_linkage(riv,
     # check if the riv len, riv_slice add up to cat
     if len(riv_slice)+len(cat) != len(riv):
         sys.exit('There are differences between the river and cat')
-            
+
     # check the ids
     if set(riv_slice['LINKNO'].values) | set(cat['streamID'].values) != set(riv['LINKNO'].values):
         sys.exit('inside identifying linkage, the LINKNO and streamID are not the same as riv LINKNO')
-    
+
     # add linkage flag
     riv['linkage'] = 0
     riv.loc[riv['LINKNO'].isin(riv_slice['LINKNO'].values), 'linkage'] = 1
-    
+
     # return
     return riv, cat
 
 def tdx_contraction_of_linkage  (df,
                                  mapping = {'id':'LINKNO','next_id':'DSLINKNO','linkage_flag':'linkage'},
                                  column_to_drop = ['USLINKNO1', 'USLINKNO2']):
-    
+
     # get the name of id, next_id, linkage_flag
     downID = mapping.get('next_id')
     ID = mapping.get('id')
@@ -316,35 +317,35 @@ def tdx_contraction_of_linkage  (df,
     df[downID] = df[downID].astype(int)
     df[ID] = df[ID].astype(int)
     df[linkage_flag] = df[linkage_flag].astype(int)
-    
+
     for index, row in df.iterrows():
         if row[linkage_flag] == 1: # if linkage
-            # find the upstream segmenet in which drain into 
+            # find the upstream segmenet in which drain into
             idx = np.array(df[df[downID]==row[ID]].index)
             df.loc[idx,downID]=row[downID] # correct the downstream for upstream segment to skip linkage
 
     # remove the linakges
     df = df[df[linkage_flag]==0].reset_index(drop=True)
-    
+
     # drop the colomn
     df = df.drop(columns = column_to_drop)
-    
-    # df 
+
+    # df
     df = add_immediate_upstream (df,
                                  mapping = mapping)
-    
+
     # return
     return df
 
-    
+
 #     # keep the needed columns and drop the columns that will be replace
 #     attributes_df = df.copy()
 #     attributes_df = attributes_df.drop(columns = column_to_drop)
 #     attributes_df = attributes_df.drop(columns = [downID, linkage_flag])
-    
+
 #     # keep the needed columns only
 #     df = df [[ID, downID, linkage_flag]]
-    
+
 #     # Create a directed graph
 #     G = nx.DiGraph()
 
@@ -357,27 +358,27 @@ def tdx_contraction_of_linkage  (df,
 #     edges_to_contract = [(u, v) for u, v, d in G.edges(data=True) if d.get('linkage_flag_G') == 1]
 #     for u, v in edges_to_contract:
 #         G = nx.contracted_edge(G, (u, v), self_loops=False)
-    
+
 #     # convert to pandas dataframe
 #     updated_df = [(u, v, d) for u, v, d in G.edges(data=True)]
 #     updated_df = pd.DataFrame(updated_df, columns=[downID, ID, 'attributes'])
 #     updated_df = updated_df.drop(columns = ['attributes'])
 #     updated_df[ID] = updated_df[ID].astype(int)
-    
+
 #     print(len(updated_df))
 #     print(len(attributes_df))
-    
+
 #     # add attributes
 #     updated_df = pd.merge(updated_df, attributes_df, on=ID, how='inner')
-    
+
 #     print(len(updated_df))
 #     print(len(attributes_df))
-    
+
 #     # add immidiate upstream and update
 #     updated_df = add_immediate_upstream (updated_df)
-    
+
     # # return
-    # return updated_df        
+    # return updated_df
 
 def prepare_ntopo(
     riv: gpd.GeoDataFrame,
@@ -387,6 +388,7 @@ def prepare_ntopo(
     network: str,
     outlet_val: int = -9999,
     crs: int = 4326,
+    calc_rank: Optional[bool] = False,
     *args,
     **kwargs,
 ) -> gpd.GeoDataFrame:
@@ -407,7 +409,7 @@ def prepare_ntopo(
     cat_cols: dict
         A dictionary containing 'id', 'hillslope', and 'unitarea'
         keys and values corresponding to the catchment IDs and also
-        the flag indicating whether the catchment is a coastal 
+        the flag indicating whether the catchment is a coastal
         hillslope one (1) or not (0)
     network: str
         A string that define the input network topology into the function
@@ -417,14 +419,14 @@ def prepare_ntopo(
         river segments indicating the segment is an outlet for the network;
         before any subsetting, if any coastal hillslope segments exist, they
         will only be set to the outlet value.
-        
+
     Returns
     -------
     river: geopandas.GeoDataFrame
         The prepared river network topology GeoDataFrame object
     cat: geopandas.GeoDataFrame
         For consistency with other functions passes the cat as
-        output. 
+        output.
     '''
 
     # necessary assertions
@@ -463,57 +465,57 @@ def prepare_ntopo(
     # sort based on `riv_col_id` and reset_index
     river.sort_values(by=riv_col_id, axis='index', inplace=True)
     river.reset_index(drop=True, inplace=True)
-    
+
     # sort based on `cat_col_id` and reset_index
     cat.sort_values(by=cat_col_id, axis='index', inplace=True)
     cat.reset_index(drop=True, inplace=True)
 
     # assign crs
     river.set_crs(epsg=crs, inplace=True)
-    
+
     if network.lower() == 'merit':
-        
+
         # fix cicular segemnts, in other words, those whose 'id' and
         # 'next_id's are the same
         river.loc[river[riv_col_id] == river[riv_col_next_id], riv_col_next_id] = outlet_val
-        
+
         # next ID is zero! replace with outlet_val
         river.loc[river[riv_col_next_id] == 0, riv_col_next_id] = outlet_val
-        
+
         # pass the unit area from cat
         river['unitarea'] = 0
         river['unitarea'] = cat['unitarea']
-        
+
         # centroid of cat
         river['latitude'] = 0
         river['longitude'] = 0
         river['latitude'] = cat.centroid.y
         river['longitude'] = cat.centroid.x
-        
+
         # fill NAs with `riv_na_val` values in `rivers`
         river.loc[river[hil_col_id] == 1, ['maxup','up1','up2','up3','up4']] = 0
         river.loc[river[hil_col_id] == 1, ['lengthkm','lengthdir','sinuosity','slope','slope_taud']] = 0.001
         river.loc[river[hil_col_id] == 1, ['strmDrop_t','order']] = 1
         river.loc[river[hil_col_id] == 1, 'uparea'] = river.loc[river[hil_col_id] == 1, 'unitarea']
-        
+
         # values that cannot be negative to a minimume value
         river.loc[river['lengthkm'] <= 0.0, 'lengthkm'] = 0.001 # km
         river.loc[river['slope'] <= 0.0, 'slope'] = 0.0001 # m/m
         river.loc[river['slope_taud'] <= 0.0, 'slope_taud'] = 0.0001 # m/m
         river.loc[river['unitarea'] <= 0.0, 'unitarea'] = 0.001 # km2
         river.loc[river['uparea'] <= 0.0, 'uparea'] = 0.001 # km2
-        
+
         # approximate width based on uparea based on Eq. 5 of Mizukami et al., 2016
         # with changes to have at least 1 meter of channel
         # area assumed to be in meter square
         river['width'] = 0.0
         river['width'] = 0.001 * ((river['uparea']*10**6)**0.5) + 1
-        
+
         # dictionary
         data_types = {
-            'COMID': int,       
-            'order': int,     
-            'NextDownID': int,       
+            'COMID': int,
+            'order': int,
+            'NextDownID': int,
             'maxup': int,
             'up1': int,
             'up2': int,
@@ -524,45 +526,45 @@ def prepare_ntopo(
 
         # Convert columns to specified data types
         river = river.astype(data_types)
-    
+
     elif network.lower() == 'hdma':
-        
+
         # pass the unit area from cat
         river['area_org'] = 0
         river['area_org'] = cat['area_org']
-        
+
         # centroid of cat
         river['latitude'] = 0
         river['longitude'] = 0
         river['latitude'] = cat.centroid.y
         river['longitude'] = cat.centroid.x
-        
+
         # pass the area of cat as flow acc to the river
         river.loc[river[hil_col_id] == 1, 'flow_acc'] = river.loc[river[hil_col_id] == 1, 'area_org']/(10**6)
-        
+
         #
         river.loc[river[hil_col_id] == 1, 'Length'] = 0
         river.loc[river[hil_col_id] == 1, 'Slope'] = 0.0001
-        
+
         # non negative values
         river.loc[river['Length'] <= 0.0, 'Length'] = 1 # m
         river.loc[river['Slope'] <= 0.0, 'Slope'] = 0.0001 # m/m
-        
+
         # replace nan with -9999 except geometry
         columns_to_fill = [col for col in river.columns if col not in ['geometry']]
         river[columns_to_fill] = river[columns_to_fill].fillna(-9999)
-        
+
         # approximate width based on uparea based on Eq. 5 of Mizukami et al., 2016
         # with changes to have at least 1 meter of channel
         # area assumed to be in meter square
         river['width'] = 0.0
         river['width'] = 0.001 * ((river['flow_acc']*10**6)**0.5) + 1
-        
+
         # dictionary
         data_types = {
-            'OBJECTID': int,       
-            'PFAF': int,     
-            'PFAF_CODE': int,       
+            'OBJECTID': int,
+            'PFAF': int,
+            'PFAF_CODE': int,
             'PF_TYPE': int,
             'Tosegment': int,
             'seg_id': int,
@@ -570,19 +572,20 @@ def prepare_ntopo(
         }
         # Convert columns to specified data types
         river = river.astype(data_types)
-        
+
     elif network.lower() == 'tdx':
         river = river
         cat = cat
-        
+
     else:
         sys.exit('The network topology is not recognized; it should be merit, hdma, tdx')
-    
+
     # add rank, which is define in routing model <add name> and MESH model
-    river = extract_rank(river,
-                         mapping = riv_cols,
-                         outlet_value = outlet_val)
-    
+    if calc_rank:
+        river = extract_rank(river,
+                             mapping = riv_cols,
+                             outlet_value = outlet_val)
+
     # return
     return river, cat
 
@@ -595,6 +598,7 @@ def subset_ntopo(
     shapefile: gpd.GeoDataFrame = None,
     outlet_id: Optional[Union[int, Sequence[int]]] = None,
     outlet_val: Optional[int] = -9999,
+    calc_rank: Optional[bool] = False,
 ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     '''Intesecting `cat` and `riv` with a given `shapefile`
     or a specified `outlet_id` of interest.
@@ -664,16 +668,17 @@ def subset_ntopo(
 
     # assign `outlet_val` to the segments without downstream segments
     riv_clipped.loc[~riv_clipped[riv_col_next_id].isin(riv_clipped[riv_col_id]), riv_col_next_id] = outlet_val
-    
+
     # reset the index
     cat_clipped.reset_index(drop=True, inplace=True)
     riv_clipped.reset_index(drop=True, inplace=True)
-    
+
     # add rank, which is define in routing model <add name> and MESH model
-    riv_clipped = extract_rank(riv_clipped,
-                               mapping = riv_cols,
-                               outlet_value = outlet_val)
-    
+    if calc_rank:
+        riv_clipped = extract_rank(riv_clipped,
+                                   mapping = riv_cols,
+                                   outlet_value = outlet_val)
+
     # return
     return cat_clipped, riv_clipped
 
@@ -727,53 +732,53 @@ def box_to_geometry(
 def create_xr_ntopo(riv,
                     cat,
                     network): # can be hdma, or tdx
-    
+
     if network.lower() == 'merit':
-        
+
         # sort by COMID
         riv.sort_values(by='COMID').reset_index(drop=True)
         cat.sort_values(by='COMID').reset_index(drop=True)
-        
+
         # check if the riv and cat IDs are similar
         if sum(riv['COMID'].values - cat['COMID'].values) != 0:
             sys.exit('The COMID of riv and cat should be the same')
-        
+
         # rename lengthkm to length
         riv = riv.rename(columns={'lengthkm': 'length'})
-        
+
         # drop geometry to make gdf to df
         ntopo = riv.drop(columns = 'geometry')
-        
+
         # convert index to n
         ntopo = ntopo.rename_axis('n')
-        
+
         # to xarray object,
         ntopo = ntopo.to_xarray()
-        
+
         # add the units to the variables using pint
         ntopo = ntopo.pint.quantify({'length': 'km',
                                      'unitarea': 'km**2',
                                      'uparea': 'km**2'})
-        
+
         # convert dictionary
         convert = {'length': 'm',
                    'unitarea': 'm**2',
                    'uparea': 'm**2'}
-        
+
         # covert the units in ntopo
         ntopo = ntopo.pint.to(convert)
         ntopo = ntopo.pint.dequantify()
-        
+
     elif network.lower() == 'hdma':
-        
+
         # sort by COMID
         riv.sort_values(by='seg_id').reset_index(drop=True)
         cat.sort_values(by='hruid').reset_index(drop=True)
-        
+
         # check if the riv and cat IDs are similar
         if sum(riv['seg_id'].values - cat['hruid'].values) != 0:
             sys.exit('The seg_id and hruid of riv and cat should be the same')
-        
+
         # drop geometry to make gdf to df
         ntopo = riv.drop(columns = 'geometry')
 
@@ -782,27 +787,30 @@ def create_xr_ntopo(riv,
 
         # to xarray object,
         ntopo = ntopo.to_xarray()
-        
+
     elif network.lower() == 'tdx':
-        
+
+        #
+        ntopo = riv.drop(columns = 'geometry')
+
         # to xarray object,
         ntopo = ntopo.to_xarray()
-        
+
     # return the ntopo xarray object
     return ntopo
 
 def add_immediate_upstream (df,
                             mapping = {'id':'LINKNO','next_id':'DSLINKNO'}):
-    
+
     # this function add immediate segment of upstream for a river network if not provided
     # it first convert the df into a networkx derected graph, finds the sucessores for
     # river segments, provide the maximume existing upstream segments in column called maxup
     # and the values in up1, up2, up3, etc
-    
+
     # get the name of ID and downID
     downID = mapping.get('next_id')
     ID = mapping.get('id')
-    
+
     # Create a directed graph
     G = nx.DiGraph()
 
@@ -832,10 +840,10 @@ def add_immediate_upstream (df,
         print('It seems there is no upstream segment for the provided river network. '+\
               'This may mean the river network you are working may have first order rivers '+\
               'that are not connected.')
-    
-    # drop upstream 
+
+    # drop upstream
     df = df.drop(columns = 'upstream')
-        
+
     return df
 
 def longest_branch(
@@ -856,7 +864,7 @@ def longest_branch(
     ds_main_id : str or int, defaults to `None`
         column label within `riv` corresponding to downstream segments of
         each river
-        
+
     Returns
     -------
     nodes : set
@@ -926,9 +934,9 @@ def _adjust_ids(
 def extract_rank(ntopo,
                  mapping: Dict[str, str] = {'id':'COMID','next_id':'NextDownID'},
                  outlet_value: int = -9999):
-    '''Producing rank_var and next_var variables needed for 
+    '''Producing rank_var and next_var variables needed for
     MESH modelling
-    
+
     Parameters
     ----------
     seg : array-like or list-like
@@ -940,8 +948,8 @@ def extract_rank(ntopo,
     outlet_value : int, [defaults to -9999]
         The outlet value assigned to `to_segment` indicating
         sinking from the system
-    
-    
+
+
     Returns
     -------
     rank_var: numpy.array of int
@@ -956,8 +964,8 @@ def extract_rank(ntopo,
     to_segment: numpy.array of int
         The 'to_segment' that has been reordered to match values
         of `rank_var` and `next_var`.
-    
-    
+
+
     Notes
     -----
     The function is mainly developed by Dr. Ala Bahrami at
@@ -970,23 +978,23 @@ def extract_rank(ntopo,
     https://github.com/MESH-Model/MESH-Scripts
     <last accessed on August 29th, 2023>
     '''
-    
+
     # # sort based on up area
     # ntopo = ntopo.sort_values(by = 'uparea')
     # ntopo = ntopo.reset_index(drop = True)
     # ntopo['NextDownID'].iloc[38715] = -9999
     # print(ntopo)
-    
+
     # ID column
     ID_column = mapping.get('id')
     ID_next_column = mapping.get('next_id')
-    
+
     # extracting numpy array out of input iterables
     seg_arr = np.array(ntopo[ID_column])
     ds_seg_arr = np.array(ntopo[ID_next_column])
-    
-    print(seg_arr)
-    print(ds_seg_arr)
+
+    # print(seg_arr)
+    # print(ds_seg_arr)
 
     # re-order ids to match MESH's requirements
     seg_id, to_segment = _adjust_ids(seg_arr, ds_seg_arr)
@@ -1055,8 +1063,8 @@ def extract_rank(ntopo,
 
     # Construct rank_var from 1:na
     rank_var = np.arange(1, na+1).astype(np.int32)
-    
-    
+
+
     # pass the varibales into a dataframe
     df = pd.DataFrame()
 
@@ -1065,25 +1073,25 @@ def extract_rank(ntopo,
     df['Rank_Next'] = next_var
     df['seg_id'] = seg_id
     df['to_segment'] = to_segment
-    
+
     # sort df based on seg_id
     df = df.sort_values(by='seg_id')
     df = df.reset_index(drop=True)
-    
-    print(df)
-    
+
+    #print(df)
+
     # sort the input based on the seg_id also
     ntopo = ntopo.sort_values(by = ID_column)
     ntopo = ntopo.reset_index(drop=True)
-    
-    print(ntopo)
-    
+
+    #print(ntopo)
+
     # Check if 'seg_id' and 'id' columns have exactly the same values after sorting
     ids_equal = sum (np.array(df['seg_id']) - np.array(ntopo[ID_column]) )
-    
+
     if ids_equal != 0:
         sys.exit("The 'seg_id' in df and 'id' in ntopo do not have the same values after sorting.")
-        
+
     # sort based on Rank and Next index
     ntopo['Rank'] = df['Rank']
     ntopo['Rank_Next'] = df['Rank_Next']
@@ -1091,7 +1099,7 @@ def extract_rank(ntopo,
     ntopo = ntopo.reset_index(drop = True)
     # Convert columns to specified data types
     data_types = {
-        'Rank': int,       
+        'Rank': int,
         'Rank_Next': int
     }
     ntopo = ntopo.astype(data_types)
