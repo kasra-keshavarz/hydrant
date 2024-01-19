@@ -20,7 +20,6 @@ from typing import (
     Sequence,
     Iterable,
     List,
-    bool,
 )
 
 from .river_graph import find_upstream
