@@ -595,9 +595,9 @@ def subset_ntopo(
     riv: gpd.GeoDataFrame,
     riv_cols: Dict[str, str],
     shapefile: gpd.GeoDataFrame = None,
+    touch_shapefile: Optional[bool] = False,
     outlet_id: Optional[Union[int, Sequence[int]]] = None,
     outlet_val: Optional[int] = -9999,
-    calc_rank: Optional[bool] = False,
 ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     '''Intesecting `cat` and `riv` with a given `shapefile`
     or a specified `outlet_id` of interest.
@@ -635,35 +635,59 @@ def subset_ntopo(
     cat_col_id = cat_cols.get('id')
     riv_col_id = riv_cols.get('id')
     riv_col_next_id = riv_cols.get('next_id')
+    
+    # initialize
+    ids = set()
+    intersected_ids = set()
+    upstream_ids = set()
+    
+    if shapefile is None and outlet_id is None:
+        raise NotImplementedError("Either `shapefile` or `outlet_id` must be specified")
 
     if shapefile is not None:
         # check `shapefile` dtype
         assert isinstance(shapefile, gpd.GeoDataFrame), "`shapefile` must be of type geopandas.GeoDataFrame"
         # intersection with `cat`
-        upstream_ids = cat.overlay(shapefile,
-                                   how='intersection',
-                                   keep_geom_type=True)[cat_col_id]
+        intersected_ids = cat.overlay(shapefile,
+                                      how='intersection',
+                                      keep_geom_type=True)[cat_col_id]
+        intersected_ids = set(intersected_ids)
+        
+        # expand outlet_id to include all the intersected COMIDs as well it touch true
+        if touch_shapefile:
+            print('touch shapefile flag is activated, this may take some time!')
+            if outlet_id is None:
+                outlet_id = set(intersected_ids)
+            else:
+                outlet_id = set(outlet_id)
+                outlet_id.update(intersected_ids)
 
-    elif outlet_id is not None:
+    if outlet_id is not None:
         # if it is a single ID, make a set out of it
         outlet_id = set(outlet_id)
-
+        
         # check if outlet_id is included in the `riv` IDs
         assert riv[riv_col_id].isin(outlet_id).any(), "`outlet_id` must be chosen from segments included in `riv`"
-
+        
+        # TBD: this takes time with touch_shapefile flag on as it search all the upstream
+        # for the intersected shapefile, it should start from segments that are most downstream
+        # this needs uparea to be provided, perhpas optional, to this code and the set is arranged
+        # based on the decending order of up area to avoid recalculation.
         # find upstream segments
-        upstream_ids = set()
         for element in outlet_id:
-            upstream_ids.update(find_upstream(gdf=riv,
-                                              target_id=element,
-                                              main_id=riv_col_id,
-                                              ds_main_id=riv_col_next_id))
-    else:
-        raise NotImplementedError("Either `shapefile` or `outlet_id` must be specified")
-
+            if element not in upstream_ids:
+                upstream_ids.update(find_upstream(gdf=riv,
+                                                  target_id=element,
+                                                  main_id=riv_col_id,
+                                                  ds_main_id=riv_col_next_id))
+    
+    # update ids with intersected and upstreams
+    ids.update(intersected_ids)
+    ids.update(upstream_ids)
+    
     # index `cat` and `riv` and return `cat_clipped` and `riv_clipped`
-    cat_clipped = cat.loc[cat[cat_col_id].isin(upstream_ids), :].copy()
-    riv_clipped = riv.loc[riv[riv_col_id].isin(upstream_ids), :].copy()
+    cat_clipped = cat.loc[cat[cat_col_id].isin(ids), :].copy()
+    riv_clipped = riv.loc[riv[riv_col_id].isin(ids), :].copy()
 
     # assign `outlet_val` to the segments without downstream segments
     riv_clipped.loc[~riv_clipped[riv_col_next_id].isin(riv_clipped[riv_col_id]), riv_col_next_id] = outlet_val
@@ -671,12 +695,6 @@ def subset_ntopo(
     # reset the index
     cat_clipped.reset_index(drop=True, inplace=True)
     riv_clipped.reset_index(drop=True, inplace=True)
-
-    # add rank, which is define in routing model <add name> and MESH model
-    if calc_rank:
-        riv_clipped = extract_rank(riv_clipped,
-                                   mapping = riv_cols,
-                                   outlet_value = outlet_val)
 
     # return
     return cat_clipped, riv_clipped
