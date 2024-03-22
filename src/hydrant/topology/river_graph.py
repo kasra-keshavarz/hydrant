@@ -139,7 +139,10 @@ def longest_branch(
         a set object containing river segment `main_id` calues of the
         longest branch found in `riv`
     """
-    riv_graph = nx.from_pandas_edgelist(riv, main_id, ds_main_id)
+    riv_graph = nx.from_pandas_edgelist(riv,
+                                        main_id,
+                                        ds_main_id,
+                                        create_using=nx.DiGraph)
 
     nodes = nx.dag_longest_path(riv_graph)
 
