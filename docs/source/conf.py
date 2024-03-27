@@ -337,6 +337,7 @@ latex_documents = [
         "index",
         "hydrant.tex",
         "hydrant: powerful Python geospatial fabric kit",
+        "hydrant contributors",
         "manual",
     )
 ]
