@@ -138,7 +138,7 @@ source_encoding = "utf-8"
 master_doc = "index"
 
 # General information about the project.
-project = "pandas"
+project = "hydrant"
 # We have our custom "hydrant_footer.html" template, using copyright for the
 # current year
 copyright = f"2023-{datetime.now().year},"
@@ -150,7 +150,6 @@ copyright = f"2023-{datetime.now().year},"
 # The short X.Y version.
 import hydrant  # isort:skip
 
-# version = '%s r%s' % (pandas.__version__, svn_version())
 version = str(hydrant.__version__)
 
 # The full version, including alpha/beta/rc tags.
@@ -246,7 +245,7 @@ html_static_path = ["_static"]
 
 html_css_files = [
     "css/getting_started.css",
-    "css/pandas.css",
+    "css/hydrant.css",
 ]
 
 # The name of an image file (within the static path) to use as favicon of the
@@ -270,8 +269,6 @@ html_css_files = [
 
 # Add redirect for previously existing API pages
 # each item is like `(from_old, to_new)`
-# To redirect a class and all its methods, see below
-# https://github.com/pandas-dev/pandas/issues/16186
 
 header = f"""\
 .. currentmodule:: hydrant 
@@ -371,7 +368,7 @@ if include_api:
 
 # extlinks alias
 extlinks = {
-    "issue": ("https://github.com/pandas-dev/pandas/issues/%s", "GH %s"),
+    "issue": ("https://github.com/kasra-keshavarz//issues/%s", "GH %s"),
 }
 
 
@@ -388,7 +385,6 @@ ipython_execlines = [
 
 
 # Add custom Documenter to handle attributes/methods of an AccessorProperty
-# eg pandas.Series.str and pandas.Series.dt (see GH9322)
 
 import sphinx  # isort:skip
 from sphinx.ext.autodoc import (  # isort:skip
@@ -426,7 +422,6 @@ class AccessorLevelDocumenter(Documenter):
     # modname is None, base the last elements (eg 'hour')
     # and path the part before (eg 'Series.dt')
     # def resolve_name(self, modname, parents, path, base):
-    #     modname = 'pandas'
     #     mod_cls = path.rstrip('.')
     #     mod_cls = mod_cls.split('.')
     #
@@ -498,47 +493,6 @@ class AccessorCallableDocumenter(AccessorLevelDocumenter, MethodDocumenter):
         return MethodDocumenter.format_name(self).removesuffix(".__call__")
 
 
-class PandasAutosummary(Autosummary):
-    """
-    This alternative autosummary class lets us override the table summary for
-    Series.plot and DataFrame.plot in the API docs.
-    """
-
-    def _replace_pandas_items(self, display_name, sig, summary, real_name):
-        # this a hack: ideally we should extract the signature from the
-        # .__call__ method instead of hard coding this
-        if display_name == "DataFrame.plot":
-            sig = "([x, y, kind, ax, ....])"
-            summary = "DataFrame plotting accessor and method"
-        elif display_name == "Series.plot":
-            sig = "([kind, ax, figsize, ....])"
-            summary = "Series plotting accessor and method"
-        return (display_name, sig, summary, real_name)
-
-    @staticmethod
-    def _is_deprecated(real_name):
-        try:
-            obj, parent, modname = _import_by_name(real_name)
-        except ImportError:
-            return False
-        doc = NumpyDocString(obj.__doc__ or "")
-        summary = "".join(doc["Summary"] + doc["Extended Summary"])
-        return ".. deprecated::" in summary
-
-    def _add_deprecation_prefixes(self, items):
-        for item in items:
-            display_name, sig, summary, real_name = item
-            if self._is_deprecated(real_name):
-                summary = f"(DEPRECATED) {summary}"
-            yield display_name, sig, summary, real_name
-
-    def get_items(self, names):
-        items = Autosummary.get_items(self, names)
-        items = [self._replace_pandas_items(*item) for item in items]
-        items = list(self._add_deprecation_prefixes(items))
-        return items
-
-
 # based on numpy doc/source/conf.py
 def linkcode_resolve(domain, info) -> str | None:
     """
@@ -589,14 +543,14 @@ def linkcode_resolve(domain, info) -> str | None:
     else:
         linespec = ""
 
-    fn = os.path.relpath(fn, start=os.path.dirname(pandas.__file__))
+    fn = os.path.relpath(fn, start=os.path.dirname(hydrant.__file__))
 
-    if "+" in pandas.__version__:
-        return f"https://github.com/pandas-dev/pandas/blob/main/pandas/{fn}{linespec}"
+    if "+" in hydrant.__version__:
+        return f"https://github.com/kasra-keshavarz/hydrant/blob/main/hydrant/{fn}{linespec}"
     else:
         return (
-            f"https://github.com/pandas-dev/pandas/blob/"
-            f"v{pandas.__version__}/pandas/{fn}{linespec}"
+            f"https://github.com/kasra-keshavarz/hydrant/blob/"
+            f"v{hydrant.__version__}/hydrant/{fn}{linespec}"
         )
 
 
@@ -647,15 +601,6 @@ def process_class_docstrings(app, what, name, obj, options, lines) -> None:
 
 
 _BUSINED_ALIASES = [
-    "pandas.tseries.offsets." + name
-    for name in [
-        "BDay",
-        "CDay",
-        "BMonthEnd",
-        "BMonthBegin",
-        "CBMonthEnd",
-        "CBMonthBegin",
-    ]
 ]
 
 
@@ -704,47 +649,5 @@ def setup(app) -> None:
     app.add_autodocumenter(AccessorAttributeDocumenter)
     app.add_autodocumenter(AccessorMethodDocumenter)
     app.add_autodocumenter(AccessorCallableDocumenter)
-    app.add_directive("autosummary", PandasAutosummary)
 
 
-# Ignore list for broken links,found in CI run checks for broken-linkcheck.yml
-
-linkcheck_ignore = [
-    "^http://$",
-    "^https://$",
-    *[
-        re.escape(link)
-        for link in [
-            "http://scatterci.github.io/pydata/pandas",
-            "http://specs.frictionlessdata.io/json-table-schema/",
-            "https://crates.io/crates/calamine",
-            "https://devguide.python.org/setup/#macos",
-            "https://en.wikipedia.org/wiki/Imputation_statistics",
-            "https://en.wikipedia.org/wiki/Imputation_(statistics",
-            "https://github.com/noatamir/pandas-dev",
-            "https://github.com/pandas-dev/pandas/blob/main/pandas/plotting/__init__.py#L1",
-            "https://github.com/pandas-dev/pandas/blob/v0.20.2/pandas/core/generic.py#L568",
-            "https://github.com/pandas-dev/pandas/blob/v0.20.2/pandas/core/frame.py#L1495",
-            "https://github.com/pandas-dev/pandas/issues/174151",
-            "https://gitpod.io/#https://github.com/USERNAME/pandas",
-            "https://manishamde.github.io/blog/2013/03/07/pandas-and-python-top-10/",
-            "https://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes.table",
-            "https://nipunbatra.github.io/blog/visualisation/2013/05/01/aggregation-timeseries.html",
-            "https://nbviewer.ipython.org/gist/metakermit/5720498",
-            "https://numpy.org/doc/stable/user/basics.byteswapping.html",
-            "https://pandas.pydata.org/pandas-docs/stable/io.html#io-chunking",
-            "https://pandas.pydata.org/pandas-docs/stable/ecosystem.html",
-            "https://sqlalchemy.readthedocs.io/en/latest/dialects/index.html",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a000245912.htm",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a000214639.htm",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a002283942.htm",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a000245965.htm",
-            "https://support.sas.com/documentation/cdl/en/imlug/66845/HTML/default/viewer.htm#imlug_langref_sect455.htm",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a002284668.htm",
-            "https://support.sas.com/documentation/cdl/en/lrdict/64316/HTML/default/viewer.htm#a002978282.htm",
-            "https://wesmckinney.com/blog/update-on-upcoming-pandas-v0-10-new-file-parser-other-performance-wins/",
-            "https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022",
-            "pandas.zip",
-        ]
-    ],
-]
