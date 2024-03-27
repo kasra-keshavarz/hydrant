@@ -18,8 +18,8 @@ hydrant documentation
 `Issues & Ideas <https://github.com/kasra-keshavarz/hydrant/issues>`__ |
 `Q&A Support <https://github.com/kasra-keshavarz/hydrant/issues>`__ |
 
-:mod:`hydrant` is an open source, GPLv3-licensed library providing 
-efficient hydrological analysis tool for the `Python <https://www.python.org/>`__
+:mod:`hydrant` is a GPLv3-licensed library providing 
+efficient hydrological analysis tools for the `Python <https://www.python.org/>`__
 programming language.
 
 .. grid:: 1 2 2 2
