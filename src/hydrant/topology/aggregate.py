@@ -95,3 +95,210 @@ def union_seg(
 
     return gdf
 
+import pandas as pd
+import numpy as np
+import networkx as nx
+import hydrant.topology.geom as gm
+import matplotlib.pyplot as plt
+from typing import (
+    Union,
+    List
+)
+from __future__ import annotations
+
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import hydrant.topology.geom as gm
+import subprocess
+import os
+from   shapely.geometry import Point
+
+def find_upstream(
+    gdf: gpd.GeoDataFrame,
+    target_id: Union[str, int, ...],
+    main_id: str,
+    ds_main_id: str,
+) -> set[...]:
+    '''Find "ancestors" or upstream segments in a river network given
+    in the from of a geopandas.GeoDataFrame `gdf`
+    
+    Parameters
+    ----------
+    gdf: geopandas.GeoDataFrame
+        GeoDataFrame of river segments including at least three pieces
+        of information: 1) geometries of segments, 2) segment IDs, and
+        3) downstream segment IDs
+    target_id: str, int, or any other data type as included in `gdf`
+        Indicating the target ID anscestor or upstream of which is
+        desired
+    main_id: str
+        String defining the column of element IDs in the input geopandas
+        dataframe
+    ds_main_id: str
+        String defining the column of downstream element IDs in the
+        input geopandas dataframe
+    
+    Returns
+    -------
+    nodes: list
+        IDs of nodes being upstream or anscestor of the `target_id`
+    
+    '''
+    # creating a DiGraph out of `gdf` object
+    riv_graph = nx.from_pandas_edgelist(gdf,
+                                        source=main_id,
+                                        target=ds_main_id,
+                                        create_using=nx.DiGraph)
+
+    # return nodes in a list
+    nodes = nx.ancestors(riv_graph, target_id)
+
+    # adding `target_id` as the last node of the branch
+    nodes.add(target_id)
+
+    return nodes
+
+def main_branch(df):
+    
+    # Create a directed graph
+    G = nx.DiGraph()
+
+    # Add edges and assign upa as edge weight
+    for _, row in df.iterrows():
+        G.add_edge(row['next'], row['id'], weight=row['upa'])
+        
+    # get the longest distance weighted based on up area
+    longest_path = nx.dag_longest_path(G, weight='weight')
+
+    #print("Longest distance:", longest_path)
+    
+    # Set flag to 1 where id is in the array_to_check
+    df ['main_branch'] = 0
+    df.loc[df['id'].isin(longest_path), 'main_branch'] = 1
+    
+    return df
+
+def pfaf_one_round(df):
+    
+    df['pfaf_temp'] = 1
+    df = main_branch(df)
+    
+    #print('df',df)
+    
+    # Separate DataFrame based on flag value
+    df_main      = df[df['main_branch'] == 1].sort_values(by='upa', ignore_index=True)
+    
+    if len(df) != len(df_main):
+        
+        # identify 4 largest upstream segments to main branch
+        df_none_main = df[df['main_branch'] == 0].sort_values(by='upa', ignore_index=True, ascending=False)
+        max_4_up = df_none_main.loc[df_none_main['next'].isin(df_main['id'])].head(4)
+        max_4_up = max_4_up.sort_values(by='upa', ignore_index=True)
+
+        # attach the uparea of the next down ID, which are on main ID, to the max_4_up dataframe
+        max_4_up ['next_up_area'] = 0
+        max_4_up ['up_confluence_main_id'] = 0
+        for index, row in max_4_up.iterrows():
+            # get the up area of df_main that is downstream of max_4_up
+            max_4_up.loc[index,'next_up_area'] = df_main['upa'].loc[df_main['id']==row['next']].values
+            index_temp = df_main.loc[df_main['id']==row['next']].index-1
+            index_temp = np.array(index_temp).item()
+            max_4_up.loc[index,'up_confluence_main_id'] = df_main['id'].loc[index_temp] #.loc[df_main.loc[df_main['id']==row['next']].index.values+1]
+
+        max_4_up = max_4_up.sort_values(by='next_up_area', ignore_index=True)
+        
+        if max_4_up.empty:
+            raise ValueError("Error: max_4_up is empty")
+
+        # get the len of max_4_up unique elements
+        if len(np.unique(max_4_up['next'])) == 4:
+            odd_pfafs = [3,5,7,9]
+        elif len(np.unique(max_4_up['next'])) == 3:
+            odd_pfafs = [3,5,9]
+        elif len(np.unique(max_4_up['next'])) == 2:
+            odd_pfafs = [3,9]
+        elif len(np.unique(max_4_up['next'])) == 1:
+            odd_pfafs = [9]
+
+        # get the len of max_4_up elements
+        if len(max_4_up['next']) == 4:
+            even_pfafs = [2,4,6,8]
+        elif len(max_4_up['next']) == 3:
+            even_pfafs = [2,4,6]
+        elif len(max_4_up['next']) == 2:
+            even_pfafs = [2,4]
+        elif len(max_4_up['next']) == 1:
+            even_pfafs = [2]
+
+        # add the segment and station into a data frame
+        seg_ids = np.array([])
+        pfaf_codes = np.array([])
+
+        # Add values to the array for main branch
+        seg_ids = np.append(seg_ids, max_4_up['up_confluence_main_id'])
+        pfaf_codes = np.append(pfaf_codes, np.flip(odd_pfafs, axis=0))
+
+        # add values to array for tributaries
+        seg_ids = np.append(seg_ids, max_4_up['id'])
+        pfaf_codes = np.append(pfaf_codes, np.flip(even_pfafs, axis=0))
+        zipped = zip(seg_ids, pfaf_codes)
+        sorted_zipped = sorted(zipped, key=lambda x: x[1])
+
+        # get the upstream and assign the pfaf from smaller values to largest values
+        df ['pfaf_temp'] = 1
+
+        for seg_id, pfaf_code in sorted_zipped:
+            ids_selected = find_upstream(df, seg_id, 'id', 'next')
+            # replace the ids in df
+            indices = df[df['id'].isin(ids_selected)].index
+            # Update 'flag' column to 1 for the rows with matching indices
+            df.loc[indices, 'pfaf_temp'] = pfaf_code
+
+    return df
+
+
+def pfaf(df):
+    
+    # order_id
+    order_id = df['id'].values
+    
+    # initial pfaf set up for the df
+    df = pfaf_one_round (df)
+    df ['pfaf'] = df ['pfaf_temp']
+    
+    
+    for i in np.arange(2, 5):
+        
+        if len(df) != len(np.unique(df ['pfaf'])):
+        
+            df_slice_total = pd.DataFrame()
+
+            for m in np.unique(df ['pfaf']):
+
+                df_slice = df[df['pfaf']==m]
+                df_slice = pfaf_one_round(df_slice)
+                df_slice_total = pd.concat([df_slice_total,df_slice], ignore_index=True)
+
+            df = df_slice_total.copy()
+
+            print(df)
+        else:
+            
+            df['pfaf_temp'] = 0
+
+        # Convert values in column1 and column2 to strings
+        df['pfaf'] = df['pfaf'].astype(str)
+        df['pfaf_temp'] = df['pfaf_temp'].astype(str)
+
+        # Concatenate the strings in column1 and column2
+        df['pfaf'] = df['pfaf'] + df['pfaf_temp']
+
+        # Convert the concatenated string back to integers
+        df['pfaf'] = df['pfaf'].astype(int)
+        
+        
+        df = df.set_index('id').loc[order_id].reset_index()
+        
+    return df
