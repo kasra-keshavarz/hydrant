@@ -8,10 +8,11 @@ from typing import Dict, Union, List
 from itertools import product
 import sys
 import xarray as xr
+import re
 
 
 
-def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=False):
+def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=True):
     
     # Sort the mapping dictionary based on keys
     mapping = dict(sorted(mapping.items()))
@@ -121,6 +122,7 @@ def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=False):
 
 
 def Stat_to_Xarray(df, info, mapping):
+    
     # Set 'COMID' column as index
     df.set_index(info['ID'], inplace=True)
 
@@ -141,8 +143,7 @@ def Stat_to_Xarray(df, info, mapping):
     return ds
 
 
-def intersect_df(self,
-                 *dfs: pd.DataFrame,
+def intersect_df(*dfs: pd.DataFrame,
                  df_mappings: Union[Dict[str, Dict[str, str]], None] = None,
                  remove_zero_combinations: bool = True):
 

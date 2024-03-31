@@ -1,11 +1,32 @@
 """
 Aggregation methods for river and subbasin geometries
 """
-
+from __future__ import annotations
 import geopandas as gpd
 import pandas as pd
 import numpy as np
 import networkx as nx
+
+import pandas as pd
+import numpy as np
+import networkx as nx
+import hydrant.topology.geom as gm
+import matplotlib.pyplot as plt
+from typing import (
+    Union,
+    List
+)
+
+
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import hydrant.topology.geom as gm
+import subprocess
+import os
+from   shapely.geometry import Point
+import warnings
 
 from typing import (
     Union,
@@ -95,25 +116,10 @@ def union_seg(
 
     return gdf
 
-import pandas as pd
-import numpy as np
-import networkx as nx
-import hydrant.topology.geom as gm
-import matplotlib.pyplot as plt
-from typing import (
-    Union,
-    List
-)
-from __future__ import annotations
 
-import geopandas as gpd
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import hydrant.topology.geom as gm
-import subprocess
-import os
-from   shapely.geometry import Point
+
+# Suppress SettingWithCopyWarning
+warnings.filterwarnings('ignore')
 
 def find_upstream(
     gdf: gpd.GeoDataFrame,
@@ -160,14 +166,20 @@ def find_upstream(
 
     return nodes
 
-def main_branch(df):
+def main_branch(df, df_info):
+    
+    # get the values
+    id_name     = df_info.get('id')
+    next_name   = df_info.get('next')
+    uparea_name = df_info.get('uparea')
+    area_name   = df_info.get('area')
     
     # Create a directed graph
     G = nx.DiGraph()
 
     # Add edges and assign upa as edge weight
     for _, row in df.iterrows():
-        G.add_edge(row['next'], row['id'], weight=row['upa'])
+        G.add_edge(row[next_name], row[id_name], weight=row[uparea_name])
         
     # get the longest distance weighted based on up area
     longest_path = nx.dag_longest_path(G, weight='weight')
@@ -175,61 +187,68 @@ def main_branch(df):
     #print("Longest distance:", longest_path)
     
     # Set flag to 1 where id is in the array_to_check
-    df ['main_branch'] = 0
-    df.loc[df['id'].isin(longest_path), 'main_branch'] = 1
+    df.loc[:,'main_branch'] = 0
+    df.loc[df[id_name].isin(longest_path), 'main_branch'] = 1
     
     return df
 
-def pfaf_one_round(df):
+def pfaf_one_round(df, df_info):
     
-    df['pfaf_temp'] = 1
-    df = main_branch(df)
+    # get the values
+    id_name     = df_info.get('id')
+    next_name   = df_info.get('next')
+    uparea_name = df_info.get('uparea')
+    area_name   = df_info.get('area')
     
-    #print('df',df)
+    # add the pfaf_temp and get the main branch
+    df.loc[:,'pfaf_temp'] = 1
+    df = main_branch(df, df_info)
     
     # Separate DataFrame based on flag value
-    df_main      = df[df['main_branch'] == 1].sort_values(by='upa', ignore_index=True)
+    df_main      = df[df['main_branch'] == 1].sort_values(by=uparea_name, ignore_index=True)
     
     if len(df) != len(df_main):
         
         # identify 4 largest upstream segments to main branch
-        df_none_main = df[df['main_branch'] == 0].sort_values(by='upa', ignore_index=True, ascending=False)
-        max_4_up = df_none_main.loc[df_none_main['next'].isin(df_main['id'])].head(4)
-        max_4_up = max_4_up.sort_values(by='upa', ignore_index=True)
+        df_none_main = df[df['main_branch'] == 0].sort_values(by=uparea_name, ignore_index=True, ascending=False)
+        max_4_up = df_none_main.loc[df_none_main[next_name].isin(df_main[id_name])].head(4)
+        max_4_up = max_4_up.sort_values(by=uparea_name, ignore_index=True)
 
         # attach the uparea of the next down ID, which are on main ID, to the max_4_up dataframe
-        max_4_up ['next_up_area'] = 0
-        max_4_up ['up_confluence_main_id'] = 0
+        max_4_up['next_up_area'] = 0
+        max_4_up['up_confluence_main_id'] = 0
         for index, row in max_4_up.iterrows():
             # get the up area of df_main that is downstream of max_4_up
-            max_4_up.loc[index,'next_up_area'] = df_main['upa'].loc[df_main['id']==row['next']].values
-            index_temp = df_main.loc[df_main['id']==row['next']].index-1
+            max_4_up.loc[index,'next_up_area'] = df_main[uparea_name].loc[df_main[id_name]==row[next_name]].values
+            index_temp = df_main.loc[df_main[id_name]==row[next_name]].index-1
             index_temp = np.array(index_temp).item()
-            max_4_up.loc[index,'up_confluence_main_id'] = df_main['id'].loc[index_temp] #.loc[df_main.loc[df_main['id']==row['next']].index.values+1]
+            max_4_up.loc[index,'up_confluence_main_id'] = df_main[id_name].loc[index_temp] 
 
         max_4_up = max_4_up.sort_values(by='next_up_area', ignore_index=True)
+        
+        #print(max_4_up)
         
         if max_4_up.empty:
             raise ValueError("Error: max_4_up is empty")
 
         # get the len of max_4_up unique elements
-        if len(np.unique(max_4_up['next'])) == 4:
+        if len(np.unique(max_4_up[next_name])) == 4:
             odd_pfafs = [3,5,7,9]
-        elif len(np.unique(max_4_up['next'])) == 3:
+        elif len(np.unique(max_4_up[next_name])) == 3:
             odd_pfafs = [3,5,9]
-        elif len(np.unique(max_4_up['next'])) == 2:
+        elif len(np.unique(max_4_up[next_name])) == 2:
             odd_pfafs = [3,9]
-        elif len(np.unique(max_4_up['next'])) == 1:
+        elif len(np.unique(max_4_up[next_name])) == 1:
             odd_pfafs = [9]
 
         # get the len of max_4_up elements
-        if len(max_4_up['next']) == 4:
+        if len(max_4_up[next_name]) == 4:
             even_pfafs = [2,4,6,8]
-        elif len(max_4_up['next']) == 3:
+        elif len(max_4_up[next_name]) == 3:
             even_pfafs = [2,4,6]
-        elif len(max_4_up['next']) == 2:
+        elif len(max_4_up[next_name]) == 2:
             even_pfafs = [2,4]
-        elif len(max_4_up['next']) == 1:
+        elif len(max_4_up[next_name]) == 1:
             even_pfafs = [2]
 
         # add the segment and station into a data frame
@@ -241,51 +260,89 @@ def pfaf_one_round(df):
         pfaf_codes = np.append(pfaf_codes, np.flip(odd_pfafs, axis=0))
 
         # add values to array for tributaries
-        seg_ids = np.append(seg_ids, max_4_up['id'])
+        seg_ids = np.append(seg_ids, max_4_up[id_name])
         pfaf_codes = np.append(pfaf_codes, np.flip(even_pfafs, axis=0))
         zipped = zip(seg_ids, pfaf_codes)
         sorted_zipped = sorted(zipped, key=lambda x: x[1])
 
         # get the upstream and assign the pfaf from smaller values to largest values
-        df ['pfaf_temp'] = 1
+        df.loc[:,'pfaf_temp'] = 1
 
         for seg_id, pfaf_code in sorted_zipped:
-            ids_selected = find_upstream(df, seg_id, 'id', 'next')
+            ids_selected = find_upstream(df, seg_id, id_name, next_name)
             # replace the ids in df
-            indices = df[df['id'].isin(ids_selected)].index
+            indices = df[df[id_name].isin(ids_selected)].index
             # Update 'flag' column to 1 for the rows with matching indices
             df.loc[indices, 'pfaf_temp'] = pfaf_code
 
     return df
 
 
-def pfaf(df):
+def find_separated_graphs(df, df_info):
     
-    # order_id
-    order_id = df['id'].values
+    # get the values
+    id_name     = df_info.get('id')
+    next_name   = df_info.get('next')
+    
+    # Create a graph from the dataframe
+    G = nx.from_pandas_edgelist(df, id_name, next_name)
+
+    # Find connected components in the graph
+    connected_components = list(nx.connected_components(G))
+
+    # Map each node to its connected component
+    node_to_component = {}
+    for i, component in enumerate(connected_components, 1):
+        for node in component:
+            node_to_component[node] = i
+
+    # Create a new column in the dataframe indicating the component number
+    df['graph_number'] = df[id_name].map(node_to_component)
+
+    return df
+
+
+def transform_array(arr):
+    # Find the maximum value in the array
+    max_value = np.max(arr)
+    
+    # Determine the number of digits in the maximum value
+    num_digits = len(str(max_value))
+    
+    # Calculate the multiplier
+    multiplier = 10 ** num_digits
+    
+    # Transform the array
+    transformed_arr = arr * multiplier
+    
+    return transformed_arr
+
+
+def pfaf_sub(df, df_info = {'id':'COMID', 'next':'NextDownID', 'uparea': 'uparea', 'area': 'unitarea'}, depth = 10):
+    
+    # get the values
+    id_name     = df_info.get('id')
+    next_name   = df_info.get('next')
+    uparea_name = df_info.get('uparea')
+    area_name   = df_info.get('area')
+    
+    # get the current order based on id to sort later
+    order_id = df[id_name].values
     
     # initial pfaf set up for the df
-    df = pfaf_one_round (df)
-    df ['pfaf'] = df ['pfaf_temp']
+    df = pfaf_one_round (df, df_info=df_info)
+    df['pfaf'] = df['pfaf_temp']
     
-    
-    for i in np.arange(2, 5):
-        
+    for i in np.arange(2, depth):
         if len(df) != len(np.unique(df ['pfaf'])):
-        
             df_slice_total = pd.DataFrame()
-
             for m in np.unique(df ['pfaf']):
-
                 df_slice = df[df['pfaf']==m]
-                df_slice = pfaf_one_round(df_slice)
+                df_slice = pfaf_one_round(df_slice, df_info)
                 df_slice_total = pd.concat([df_slice_total,df_slice], ignore_index=True)
-
             df = df_slice_total.copy()
-
-            print(df)
+            #print(df)
         else:
-            
             df['pfaf_temp'] = 0
 
         # Convert values in column1 and column2 to strings
@@ -296,9 +353,73 @@ def pfaf(df):
         df['pfaf'] = df['pfaf'] + df['pfaf_temp']
 
         # Convert the concatenated string back to integers
-        df['pfaf'] = df['pfaf'].astype(int)
+        #df['pfaf'] = df['pfaf'].astype(int)
+        df.loc[:,'pfaf'] = df.loc[:,'pfaf'].astype(int)
         
-        
-        df = df.set_index('id').loc[order_id].reset_index()
+        # set back to the original order
+        df = df.set_index(id_name).loc[order_id].reset_index()
         
     return df
+
+
+
+def pfaf(df, df_info = {'id':'COMID', 'next':'NextDownID', 'uparea': 'uparea', 'area': 'unitarea'}, depth = 10):
+    
+    # get the values
+    id_name     = df_info.get('id')
+    next_name   = df_info.get('next')
+    uparea_name = df_info.get('uparea')
+    area_name   = df_info.get('area')
+    
+    # get the current order based on id to sort later
+    order_id = df[id_name].values
+    
+    # replace the possible 0 and negative values for nextid for networkx
+    arr = np.array(df[next_name].values)
+    max_value = arr.max() + 1
+    for i in range(len(arr)):
+        if arr[i] <= 0:
+            arr[i] = max_value
+            max_value += 1
+    df[next_name] = arr
+    
+    # get separated regions
+    df = find_separated_graphs(df, df_info)
+    df ['pfaf_region'] = transform_array(df ['graph_number'].values)
+    df = df.drop(columns= ['graph_number'])
+    print(np.unique(df['pfaf_region'].values))
+    
+    # loop over separated regions
+    df_all = pd.DataFrame()
+    for i in np.unique(df['pfaf_region'].values):
+        # slice the shapefile
+        df_slice = df[df['pfaf_region']==i]
+        df_slice = pfaf_sub(df_slice, df_info, depth)
+        df_all = pd.concat([df_slice,df_all], ignore_index=True)
+        
+    # get the df in order
+    df = df_all.set_index(id_name).loc[order_id].reset_index()    
+    
+    # drop the extra columns
+    df = df.drop(columns=['pfaf_temp','main_branch'])
+        
+    return df
+
+def pfaf_agg (df, df_info={'pfaf': 'pfaf', 'pfaf_region': 'pfaf_region'}, depth_agg = 2):
+    
+    # get the values
+    pfaf        = df_info.get('pfaf')
+    pfaf_region = df_info.get('pfaf_region')
+    
+    #
+    def extract_first_n_digits(x,n=depth_agg):
+        return str(x)[:n]
+    
+    # Apply the function to create a new column
+    df['pfaf_temp'] = df[pfaf].apply(extract_first_n_digits)
+
+    # Dissolve based on the new column
+    df_agg = df.dissolve(by=['pfaf_temp',pfaf_region])
+    
+    # return
+    return df_agg
