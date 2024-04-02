@@ -164,3 +164,7 @@ cython_debug/
 
 # pycharm
 .idea
+
+# output of examples
+/examples/output/
+/examples/temporary/
