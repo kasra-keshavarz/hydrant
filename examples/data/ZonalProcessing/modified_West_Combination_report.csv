@@ -1,0 +1,20 @@
+,comb_explanation,soil_class,land_cover_NALCMS,comb_int
+0,soil_class3 land_cover_NALCMS1,3,1,1
+1,soil_class3 land_cover_NALCMS2,3,2,2
+2,soil_class3 land_cover_NALCMS5,3,5,3
+3,soil_class3 land_cover_NALCMS6,3,6,4
+4,soil_class3 land_cover_NALCMS8,3,8,5
+5,soil_class3 land_cover_NALCMS10,3,10,6
+6,soil_class3 land_cover_NALCMS14,3,14,7
+7,soil_class3 land_cover_NALCMS15,3,15,8
+8,soil_class3 land_cover_NALCMS16,3,16,9
+9,soil_class3 land_cover_NALCMS17,3,17,10
+10,soil_class3 land_cover_NALCMS18,3,18,11
+11,soil_class3 land_cover_NALCMS19,3,19,12
+12,soil_class8 land_cover_NALCMS1,8,1,13
+13,soil_class8 land_cover_NALCMS6,8,6,14
+14,soil_class8 land_cover_NALCMS8,8,8,15
+15,soil_class8 land_cover_NALCMS10,8,10,16
+16,soil_class8 land_cover_NALCMS16,8,16,17
+17,soil_class8 land_cover_NALCMS18,8,18,18
+18,soil_class8 land_cover_NALCMS19,8,19,19
