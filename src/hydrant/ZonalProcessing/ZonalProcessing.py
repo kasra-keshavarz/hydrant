@@ -98,6 +98,9 @@ def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=True):
         # also filter the mapping dictionary for the non zero column:
         mapping = {key: value for key, value in mapping.items() if int(key) in map(int, df.columns)}
         
+    # add fraction to column names
+    new_columns = [non_digit_parts + col for col in df.columns]
+    df.columns = new_columns
     
     # ==============
     # create xarray for majority and frac_
@@ -145,6 +148,7 @@ def Stat_to_Xarray(df, info, mapping):
 
 def intersect_df(*dfs: pd.DataFrame,
                  df_mappings: Union[Dict[str, Dict[str, str]], None] = None,
+                 output_dim={'id':'ID'},
                  remove_zero_combinations: bool = True):
 
     # turn input into list
@@ -165,6 +169,7 @@ def intersect_df(*dfs: pd.DataFrame,
         # Set the ID column to index for the DataFrame
         if ID is not None:
             df.index = df[ID].astype(int)
+            df.index.name = None
             df.drop(columns=[ID], inplace=True)
             df = df.sort_index()
 
@@ -213,14 +218,15 @@ def intersect_df(*dfs: pd.DataFrame,
     print('total number of non zero combinations: ',len(combination_list))
 
     # Report combinations with non-zero values
-    report = pd.DataFrame(combination_list, columns=['Combinations'])
+    report = pd.DataFrame(combination_list, columns=['comb_explanation'])
     # Split combinations into separate columns based on DataFrame columns
     for idx, df in enumerate(dfs, start=0):
         mapping = df_mappings.get(f'df{idx+1}', {})
         data_name = mapping.get('data_name', f'Data_{idx+1}')
-        report[data_name] = report['Combinations'].apply(lambda x: x.split()[idx])
+        report[data_name] = report['comb_explanation'].apply(lambda x: x.split()[idx])
         report[data_name] = report[data_name].str.extract(r'(\d+)')  # f'{chr(65 + i)}'
-    report ['comb'] = np.arange(len(report))+1
+        report[data_name] = report[data_name].astype(int)
+    report ['comb_int'] = np.arange(len(report))+1
 
     # remove the zero combination from result dataframe
     if remove_zero_combinations:
@@ -232,16 +238,27 @@ def intersect_df(*dfs: pd.DataFrame,
     for i, col in enumerate(result.columns, start=1):
         new_col_name = f'comb_{i:04d}'  # Using f-string to format column names
         result.rename(columns={col: new_col_name}, inplace=True)
+    
+    fraction = xr.DataArray(result.values,
+                            dims=('id', 'comb'),
+                            coords={'id': result.index,
+                                    'comb': result.columns})
+    
+    max_fraction = xr.DataArray(result.idxmax(axis=1).values,
+                                dims=('id'),
+                                coords={'id': result.index})
 
     # convert report to xarray
-    total_ds = report.to_xarray()        
+    total_ds = report.to_xarray()    
     total_ds = total_ds.drop_vars(['index'])
-    total_ds = total_ds.swap_dims({'index':'m'})
+    total_ds = total_ds.swap_dims({'index':'comb'})
 
     # add other variables to this
-    total_ds['fraction'] = xr.DataArray(result.values, dims=('n', 'm'))
-    total_ds['comb'] = xr.DataArray(result.columns, dims=('m'))
-    total_ds['id'] = xr.DataArray(result.index, dims=('n'))
+    total_ds['fraction'] = fraction
+    total_ds['max_fraction'] = max_fraction
+    
+    # rename the output_dim if provided
+    total_ds = total_ds.rename_dims(output_dim)
 
     # return
     return result , report, total_ds
