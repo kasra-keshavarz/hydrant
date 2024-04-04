@@ -64,7 +64,8 @@ def prepare_cat(
     hillslope_id = 'hillslope'
     
     # create of copy of the input GeoDataFrame variables
-    cst = cst.copy()
+    if cst is not None:
+        cst = cst.copy()
     cat = cat.copy()
     
     # `cat` must be of type `geopandas.GeoDataFrame`
