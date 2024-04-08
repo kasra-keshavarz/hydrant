@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = 'Commons tools for river and subbasin adjustments in Python'
 readme = "README.md"
 requires-python = ">=3.7"
-license = {file = 'LICENSE'}
+license = "GPL-3.0-or-later"
 keywords = []
 authors = [
   { name = "Kasra Keshavarz", email = "kasra.keshavarz1@ucalgary.ca" },
