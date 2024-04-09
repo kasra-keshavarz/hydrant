@@ -12,7 +12,7 @@ import re
 
 
 
-def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=True):
+def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=True, threshold = None):
     
     # Sort the mapping dictionary based on keys
     mapping = dict(sorted(mapping.items()))
@@ -31,6 +31,11 @@ def Fraction_to_Xarray(df, info, mapping, remove_zero_columns=True):
     filtered_columns = [col for col, num_part in zip(frac_columns, numeric_parts) if num_part in mapping]
     df = df[filtered_columns]
     #print(df)
+    
+    # supress values smaller than a value to 0
+    if threshold is not None:
+        df[df < threshold] = 0.00
+    
 
     # Get the complete fraction part of the columns
     # Regular expression pattern to extract the non-digit part
@@ -149,6 +154,7 @@ def Stat_to_Xarray(df, info, mapping):
 def intersect_df(*dfs: pd.DataFrame,
                  df_mappings: Union[Dict[str, Dict[str, str]], None] = None,
                  output_dim={'id':'ID'},
+                 threshold = None,
                  remove_zero_combinations: bool = True):
 
     # turn input into list
@@ -203,6 +209,8 @@ def intersect_df(*dfs: pd.DataFrame,
         for i in range(1, len(dfs)):
             col_product = col_product * dfs[i][cols[i]] # multiply the product
         # update the results
+        if threshold is not None:
+            col_product[col_product < threshold] = 0
         result[f'{" ".join(cols)}'] = col_product
 
         # keep the positive or existing combinations
