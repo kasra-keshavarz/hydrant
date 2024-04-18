@@ -8,44 +8,56 @@ Getting started
 
 Installation
 ------------
-The easiest way to install hydrant is to directly install it 
-from the relevant GitHub repository. The package is also accessible
-from the PyPI with the name ``hydrantpy``. 
+The easiest way to install `hydrant` is directly from the source code.
+The source code is available via its GitHub repository's
+`release`_ webpage. Additionally, stable versions are also accessible
+Python's Package Index (`PyPI`_).
+
+.. _release: https://github.com/kasra-keshavarz/hydrant/releases
+.. _PyPI: https://pypi.org/project/hydrantpy/
 
 Instructions for installing :ref:`from source <install.source>`,
-:ref:`PyPI <install.pypi>`, or a
-:ref:`development version <install.dev>` are also provided.
+:ref:`PyPI <install.pypi>`, or its
+:ref:`development version <install.dev>` are provided in the following.
 
 .. _install.version:
 
-Python versions support
------------------------
+Python versions supported
+-------------------------
 
-Officially Python 3.9, 3.10, 3.11 and 3.12.
+Officially Python 3.10, 3.11 and 3.12.
 
 Installing hydrant
 ------------------
 
-.. _install.github:
+.. _install.source:
 
-Installing from GitHub 
+Installing from source 
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The easiest way to get the most up-to-date version of hydrant
-is using Python's native ``pip`` installer.
+The easiest way to install hydrant is to download a release from
+its `release`_ webpage and install it using Python's native ``pip``
+installer.
+
+
+After downloading an official release, a typical installation may
+proceed with:
 
 .. code-block:: shell
 
-   pip install git+https://github.com/kasra-keshavarz/hydrant.git
+   foo@bar:~ $ tar -xvf hydrant-|version|.tar.gz
+   foo@bar:~ $ cd hydrant-|version|
+   foo@bar:hydrant-|version| $ pip install .
 
-The hydrant package could be imported by Python.
+After installation, hydrant could be directly imported via Python's
+interpreter.
 
 .. _install.pypi:
 
 Installing from PyPI
 ~~~~~~~~~~~~~~~~~~~~
 
-The hydrant package is also accessible from the PyPI via pip:
+The hydrant package is also accessible from PPyPI via pip:
 
 .. code-block:: shell
   :linenos:
