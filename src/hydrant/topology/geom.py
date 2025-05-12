@@ -173,7 +173,7 @@ def prepare_riv(
     cat: gpd.GeoDataFrame,
     cat_cols: Dict[str, str],
     outlet_val: int = -9999,
-    riv_na_val: int = 1,
+    riv_na_val: int = 1e-8,
     crs: int = 4326,
     *args,
     **kwargs,
